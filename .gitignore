@@ -1,0 +1,12 @@
+.netrc
+.DS_Store
+/.build
+/Packages
+/*.xcodeproj
+xcuserdata/
+DerivedData/
+.swiftpm
+.byebug*
+.env*
+Dependencies
+Package.resolved
