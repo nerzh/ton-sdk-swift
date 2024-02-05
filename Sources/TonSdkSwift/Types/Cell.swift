@@ -8,6 +8,7 @@
 import Foundation
 import BigInt
 
+
 public struct Cell {
     public static let HASH_BITS: UInt32 = 256
     public static let DEPTH_BITS: UInt32 = 16
@@ -104,17 +105,16 @@ public struct Cell {
         let data = Bits(bits[8...])
         let proofHash = try Bits(Array(data[0..<Int(HASH_BITS / 4)])).toHex()
         let proofDepth = Bits(Array(data[Int(HASH_BITS / 4)..<Int(HASH_BITS / 4 + DEPTH_BITS)])).toBigUInt()
-        #warning("AFTER CELL")
-//        let refHash = refs[0].hash(0)
-//        let refDepth = refs[0].depth(0)
-//
-//        guard proofHash == refHash else {
-//            throw ErrorTonSdkSwift.merkleProofCellRefHashMismatch("Merkle Proof cell ref hash must be exactly \"\(proofHash)\", got \"\(refHash)\"")
-//        }
-//
-//        guard proofDepth == refDepth else {
-//            throw ErrorTonSdkSwift.merkleProofCellRefDepthMismatch("Merkle Proof cell ref depth must be exactly \"\(proofDepth)\", got \"\(refDepth)\"")
-//        }
+        let refHash = try refs[0].hash(0)
+        let refDepth = refs[0].depth(0)
+
+        if proofHash != refHash {
+            throw ErrorTonSdkSwift("Merkle Proof cell ref hash must be exactly \"\(proofHash)\", got \"\(refHash)\"")
+        }
+
+        if proofDepth != refDepth {
+            throw ErrorTonSdkSwift("Merkle Proof cell ref depth must be exactly \"\(proofDepth)\", got \"\(refDepth)\"")
+        }
     }
     
     public static func validateMerkleUpdate(bits: Bits, refs: [Cell]) throws {
@@ -143,22 +143,21 @@ public struct Cell {
             Bits(data[512..<528]).toBigUInt(),
             Bits(data[528..<544]).toBigUInt()
         ]
+        
+        for (index, ref) in refs.enumerated() {
+            let proofHash = hashes[index]
+            let proofDepth = depths[index]
+            let refHash = try ref.hash(0)
+            let refDepth = ref.depth(0)
 
-        #warning("AFTER CELL 2")
-//        for (index, ref) in refs.enumerated() {
-//            let proofHash = hashes[index]
-//            let proofDepth = depths[index]
-//            let refHash = ref.hash(0)
-//            let refDepth = ref.depth(0)
-//
-//            guard proofHash == refHash else {
-//                throw ErrorTonSdkSwift.merkleUpdateCellRefHashMismatch("Merkle Update cell ref #\(index) hash must be exactly '\(proofHash)', got '\(refHash)'")
-//            }
-//
-//            guard proofDepth == refDepth else {
-//                throw ErrorTonSdkSwift.merkleUpdateCellRefDepthMismatch("Merkle Update cell ref #\(index) depth must be exactly '\(proofDepth)', got '\(refDepth)'")
-//            }
-//        }
+            if proofHash != refHash {
+                throw ErrorTonSdkSwift("Merkle Update cell ref #\(index) hash must be exactly '\(proofHash)', got '\(refHash)'")
+            }
+
+            if proofDepth != refDepth {
+                throw ErrorTonSdkSwift("Merkle Update cell ref #\(index) depth must be exactly '\(proofDepth)', got '\(refDepth)'")
+            }
+        }
     }
     
     public static func getMapper(type: Cell.CellType) -> (validate: (Bits, [Cell]) throws -> Void, mask: (Bits, [Cell]) -> Mask) {
@@ -216,7 +215,7 @@ public struct Cell {
     private var _depths: [BigUInt]
     public var depths: [BigUInt] { _depths }
 
-    init(bits: Bits = .init(), refs: [Cell] = .init(), type: CellType = .ordinary) throws {
+    public init(bits: Bits = .init(), refs: [Cell] = .init(), type: CellType = .ordinary) throws {
         let mapper = Self.getMapper(type: type)
         let validate = mapper.validate
         let mask = mapper.mask
@@ -232,13 +231,13 @@ public struct Cell {
         try initialize()
     }
 
-    private func initialize() throws {
+    private mutating func initialize() throws {
         let hasRefs = refs.count > 0
         let isMerkle = [CellType.merkleProof, CellType.merkleUpdate].contains(type)
         let isPrunedBranch = type == CellType.prunedBranch
         let hashIndexOffset = isPrunedBranch ? mask.hashCount - 1 : 0
 
-        var hashIndex = 0
+        var hashIndex: UInt32 = 0
 
         for levelIndex in 0...mask.level {
             if !mask.isSignificant(level: levelIndex) { continue }
@@ -253,73 +252,83 @@ public struct Cell {
             let refLevel = levelIndex + (isMerkle ? 1 : 0)
             let refsDescriptor = getRefsDescriptor(mask.apply(level: levelIndex))
             let bitsDescriptor = getBitsDescriptor()
-            let data: [Int]
+            let data: Bits
 
             if hashIndex != hashIndexOffset {
-                data = hexToBits(hashes[hashIndex - hashIndexOffset - 1])
+                data = hashes[Int(hashIndex) - Int(hashIndexOffset) - 1].hexToBits()
             } else {
                 data = getAugmentedBits()
             }
 
-            var depthRepresentation: [Int] = []
-            var hashRepresentation: [Int] = []
-            var depth = 0
+            var depthRepresentation: Bits = .init()
+            var hashRepresentation: Bits = .init()
+            var depth: BigUInt = 0
 
             for ref in refs {
                 let refDepth = ref.depth(refLevel)
-                let refHash = ref.hash(refLevel)
+                let refHash = try ref.hash(refLevel)
 
-                depthRepresentation.append(contentsOf: Cell.getDepthDescriptor(refDepth))
-                hashRepresentation.append(contentsOf: hexToBits(refHash))
+                print(Cell.getDepthDescriptor(UInt32(refDepth)).toBigUInt().description)
+                depthRepresentation += Cell.getDepthDescriptor(UInt32(refDepth))
+                hashRepresentation += refHash.hexToBits()
                 depth = max(depth, refDepth)
+                
+                
             }
 
-            let representation = refsDescriptor + bitsDescriptor + data + depthRepresentation + hashRepresentation
-
+            let representation: Bits = refsDescriptor + bitsDescriptor + data + depthRepresentation + hashRepresentation
+            
             if refs.count > 0 && depth >= 1024 {
-                throw ErrorTonSdkSwift.cellDepthError("Cell depth can't be more than 1024")
+                throw ErrorTonSdkSwift("Cell depth can't be more than 1024")
             }
 
-            let dest = hashIndex - hashIndexOffset
-            depths[dest] = depth + (hasRefs ? 1 : 0)
-            hashes[dest] = sha256(bitsToBytes(representation))
+            let dest = Int(hashIndex - hashIndexOffset)
+            let newDepth = depth + (hasRefs ? 1 : 0)
+            
+            let newHash = try representation.toBytes().sha256()
+            
+            if dest == 0 {
+                _depths.append(newDepth)
+                _hashes.append(newHash)
+            } else {
+                _depths[dest] = newDepth
+                _hashes[dest] = newHash
+            }
+            
             hashIndex += 1
         }
+        
+        
     }
     
     public var isExotic: Bool {
         type != .ordinary
     }
 
-    // Calculate depth descriptor
-    public static func getDepthDescriptor(_ depth: UInt8) -> Bits {
-        let descriptor = [depth / 256, depth % 256]
-        return Bits.init(descriptor)
+    public static func getDepthDescriptor(_ depth: UInt32) -> Bits {
+        let descriptor = Data([UInt8(depth / 256), UInt8(depth % 256)])
+        return descriptor.toBits()
     }
 
-    // Get current Cell instance refs descriptor
     public func getRefsDescriptor(_ mask: Mask? = nil) -> Bits {
         let value = UInt32(refs.count) +
             (isExotic ? 8 : 0) +
             ((mask != nil ? mask!.value : self.mask.value) * 32)
-
-        let descriptor = [UInt8(value)]
-        return .init(descriptor)
+        
+        let descriptor = Data([UInt8(value)])
+        return descriptor.toBits()
     }
 
-    // Get current Cell instance bits descriptor
     public func getBitsDescriptor() -> Bits {
         let value = Int(ceil(Double(bits.count) / 8.0)) + Int(floor(Double(bits.count) / 8.0))
-        let descriptor = [UInt8(value)]
-        return .init(descriptor)
+        let descriptor = Data([UInt8(value)])
+        return descriptor.toBits()
     }
 
-    // Get current Cell instance augmented bits
     public func getAugmentedBits() -> Bits {
         bits.augment()
     }
 
-    // Get cell's hash in hex (max level by default)
     public func hash(_ level: UInt32 = 3) throws -> String {
         guard type != CellType.prunedBranch else {
             let hashIndex = mask.apply(level: level).hashIndex
@@ -352,12 +361,12 @@ public struct Cell {
     }
 
     // Get Slice from current instance
-//    func parse() -> Slice {
-//        return Slice.parse(self)
-//    }
+    public func parse() -> CellSlice {
+        return CellSlice.parse(cell: self)
+    }
 
     // Print cell as fift-hex
-    func printCell(indent: Int = 1, size: Int = 0) throws -> String {
+    public func printCell(indent: Int = 1, size: Int = 0) throws -> String {
         let bitsCopy = bits
         let areDivisible = bitsCopy.count % 4 == 0
         let augmented = areDivisible ? bitsCopy : bitsCopy.augment(divider: 4)
@@ -372,7 +381,7 @@ public struct Cell {
     }
 
     // Checks Cell equality by comparing cell hashes
-    func isEqual(_ cell: Cell) throws -> Bool {
+    public func isEqual(_ cell: Cell) throws -> Bool {
         (try hash()) == (try cell.hash())
     }
 }

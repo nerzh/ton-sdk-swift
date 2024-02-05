@@ -9,16 +9,17 @@ import Foundation
 import BigInt
 import SwiftExtensionsPack
 
-public enum Bit: UInt8, Comparable {
-    case b0 = 0
-    case b1 = 1
-    
-    public static func < (lhs: Bit, rhs: Bit) -> Bool {
-        lhs.rawValue < rhs.rawValue
-    }
-}
-
 public struct Bits: Equatable {
+    
+    public enum Bit: UInt8, Comparable {
+        case b0 = 0
+        case b1 = 1
+        
+        public static func < (lhs: Bit, rhs: Bit) -> Bool {
+            lhs.rawValue < rhs.rawValue
+        }
+    }
+
     public var bits: [Bit]
     public var bitsUInt8: [UInt8] {
         bits.map { $0.rawValue }
@@ -83,6 +84,7 @@ public struct Bits: Equatable {
     }
     
     public func toHex() throws -> String {
+        
         guard count % 4 == 0 else {
             throw ErrorTonSdkSwift("Bits amount must be multiple of 4")
         }
@@ -99,6 +101,11 @@ public struct Bits: Equatable {
     
     public func toBytes() throws -> Data {
         try toHex().hexToBytes()
+    }
+    
+    public mutating func shift(_ amount: Int) -> Self {
+        let firstShiftBits = bits.shift(amount)
+        return .init(firstShiftBits)
     }
 }
 

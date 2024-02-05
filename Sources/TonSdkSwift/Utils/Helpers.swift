@@ -15,6 +15,15 @@ public extension Array {
             Array(self[$0 ..< Swift.min($0 + size, count)])
         }
     }
+    
+    mutating func shift(_ amount: Int) -> Self {
+        var result: [Element] = .init()
+        for _ in 0..<amount {
+            result.append(self[0])
+            self.remove(at: 0)
+        }
+        return result
+    }
 }
 
 public extension BigUInt {
@@ -28,23 +37,21 @@ public extension BigUInt {
 public extension String {
     
     func hexToBits() -> Bits {
-        let hexDigits = "0123456789ABCDEF"
-        let binaryDigits = [
-            "0000", "0001", "0010", "0011",
-            "0100", "0101", "0110", "0111",
-            "1000", "1001", "1010", "1011",
-            "1100", "1101", "1110", "1111"
-        ]
-
-        var result: [UInt8] = []
-        for char in self {
-            guard let index = hexDigits.firstIndex(of: char) else {
-                continue
+        var result: Bits = .init()
+        
+        for val in self {
+            if let chunk = Int(String(val), radix: 16) {
+                let binaryString = String(chunk, radix: 2)
+                let paddedBinaryString = String(repeating: "0", count: 4 - binaryString.count) + binaryString
+                for bit in paddedBinaryString {
+                    if let bitValue = Int(String(bit)) {
+                        result.append(bitValue > 0 ? .b1 : .b0)
+                    }
+                }
             }
-            let binaryChar = binaryDigits[hexDigits.distance(from: hexDigits.startIndex, to: index)]
-            result.append(contentsOf: binaryChar.compactMap { UInt8(String($0)) })
         }
-        return .init(result)
+        
+        return result
     }
     
     func hexToBytes() throws -> Data {
@@ -97,18 +104,17 @@ public extension Data {
     }
     
     func toBits() -> Bits {
-        var bitsArray: [UInt8] = []
+        var result: [UInt8] = []
         
-        for byte in self {
-            var byteValue = UInt8(byte)
-            for _ in 0..<8 {
-                bitsArray.insert(byteValue & 1, at: 0)
-                byteValue >>= 1
-            }
+        result = self.bytes.reduce(into: []) { acc, uint in
+            let chunk = String(uint, radix: 2)
+            let paddedBinaryString = String(repeating: "0", count: 8 - chunk.count) + chunk
+            acc.append(contentsOf: paddedBinaryString.compactMap { UInt8(String($0)) })
         }
         
-        return .init(bitsArray)
+        return .init(result)
     }
+
     
     func toHex() -> String {
         bytes.map { String(format: "%02X", $0) }.joined()

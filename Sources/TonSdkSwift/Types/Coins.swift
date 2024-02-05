@@ -9,23 +9,32 @@ import Foundation
 import BigInt
 import SwiftExtensionsPack
 
+
 public struct Coins {
     
     private static let DEFAULT_DECIMALS: Int = 9
-    private var amount: BigInt
-    let decimals: Int
-    
-    private init(nanoValue: any SignedInteger, decimals: Int) {
-        self.amount = .init(nanoValue)
-        self.decimals = decimals
+    private var _nanoValue: BigInt
+    public let decimals: Int
+    public var nanoValue: BigInt { _nanoValue }
+    public var coinsValue: Double {
+        Double(toFloatString)!
     }
     
-    public init(nanoValue: String, decimals: Int) throws {
-        guard let nanoTokens: BigInt = .init(nanoValue) else {
-            throw ErrorTonSdkSwift("Convert string \(nanoValue) to BigInt failed")
-        }
-        self.amount = nanoTokens
-        self.decimals = decimals
+    /// COINS
+    public init(_ coinsValue: any BinaryFloatingPoint) {
+        self.init(coinsValue: coinsValue, decimals: Self.DEFAULT_DECIMALS)
+    }
+    
+    public init(_ coinsValue: Decimal) {
+        self.init(coinsValue: coinsValue, decimals: Self.DEFAULT_DECIMALS)
+    }
+    
+    public init(_ coinsValue: any SignedInteger) {
+        self.init(coinsValue: coinsValue, decimals: Self.DEFAULT_DECIMALS)
+    }
+    
+    public init(_ coinsValue: any UnsignedInteger) {
+        self.init(coinsValue: coinsValue, decimals: Self.DEFAULT_DECIMALS)
     }
     
     public init(coinsValue: any BinaryFloatingPoint, decimals: Int) {
@@ -45,8 +54,59 @@ public struct Coins {
         self = stringValue.toCoins(decimals: decimals)
     }
     
-    var toFloatString: String {
-        let balanceCount = String(self).count
+    public init(coinsValue: any SignedInteger, decimals: Int) {
+        self = "\(coinsValue)".toCoins(decimals: decimals)
+    }
+    
+    public init(coinsValue: any UnsignedInteger, decimals: Int) {
+        self = "\(coinsValue)".toCoins(decimals: decimals)
+    }
+    
+    
+    /// NANO COINS
+    public init(nanoValue: any SignedInteger) {
+        self.init(nanoValue: nanoValue, decimals: Self.DEFAULT_DECIMALS)
+    }
+    
+    public init(nanoValue: any UnsignedInteger) {
+        self.init(nanoValue: nanoValue, decimals: Self.DEFAULT_DECIMALS)
+    }
+    
+    public init(nanoValue: String) throws {
+        try self.init(nanoValue: nanoValue, decimals: Self.DEFAULT_DECIMALS)
+    }
+    
+    public init(nanoValue: any BinaryFloatingPoint) {
+        self.init(nanoValue: nanoValue, decimals: Self.DEFAULT_DECIMALS)
+    }
+    
+    public init(nanoValue: any SignedInteger, decimals: Int) {
+        self._nanoValue = .init(nanoValue)
+        self.decimals = decimals
+    }
+    
+    public init(nanoValue: any UnsignedInteger, decimals: Int) {
+        self._nanoValue = .init(nanoValue)
+        self.decimals = decimals
+    }
+    
+    public init(nanoValue: String, decimals: Int) throws {
+        guard let nanoTokens: BigInt = .init(nanoValue) else {
+            throw ErrorTonSdkSwift("Convert string \(nanoValue) to BigInt failed")
+        }
+        self._nanoValue = nanoTokens
+        self.decimals = decimals
+    }
+    
+    public init(nanoValue: any BinaryFloatingPoint, decimals: Int) {
+        self._nanoValue = .init(nanoValue)
+        self.decimals = decimals
+    }
+    
+    
+    
+    public var toFloatString: String {
+        let balanceCount = String(self.nanoValue).count
         let different = balanceCount - decimals
         var floatString = ""
         if different <= 0 {
@@ -54,10 +114,10 @@ public struct Coins {
             for _ in 0..<different * -1 {
                 floatString.append("0")
             }
-            floatString.append(String(self))
+            floatString.append(String(self.nanoValue))
         } else {
             var counter = different
-            for char in String(self) {
+            for char in String(self.nanoValue) {
                 if counter == 0 {
                     floatString.append(".")
                 }
@@ -72,116 +132,66 @@ public struct Coins {
 
 
 
-extension Coins: ExpressibleByIntegerLiteral {
-    public init(integerLiteral value: Int64) {
-        self.init(value)
-    }
-}
-
-
-
-extension Coins: SignedInteger {
+extension Coins: Equatable, Comparable, Hashable {
     
-    public var magnitude: BigUInt {
-        amount.magnitude
-    }
-    
-    public var words: BigInt.Words {
-        amount.words
-    }
-    
-    public var bitWidth: Int {
-        amount.bitWidth
-    }
-    
-    public var trailingZeroBitCount: Int {
-        amount.trailingZeroBitCount
-    }
-    
-    public init<T>(truncatingIfNeeded source: T) where T : BinaryInteger {
-        self.amount = BigInt(source)
-        self.decimals = Self.DEFAULT_DECIMALS
-    }
-    
-    public init<T>(clamping source: T) where T : BinaryInteger {
-        self.amount = BigInt(source)
-        self.decimals = Self.DEFAULT_DECIMALS
-    }
-    
-    public init<T>(_ source: T) where T : BinaryInteger {
-        self.amount = BigInt(source)
-        self.decimals = Self.DEFAULT_DECIMALS
-    }
-    
-    public init?<T>(exactly source: T) where T : BinaryInteger {
-        self.amount = BigInt(source)
-        self.decimals = Self.DEFAULT_DECIMALS
-    }
-    
-    public init?<T>(exactly source: T) where T : BinaryFloatingPoint {
-        self.amount = BigInt(source)
-        self.decimals = Self.DEFAULT_DECIMALS
-    }
-    
-    public init<T>(_ source: T) where T : BinaryFloatingPoint {
-        self.amount = BigInt(source)
-        self.decimals = Self.DEFAULT_DECIMALS
+    public static func < (lhs: Coins, rhs: Coins) -> Bool {
+        lhs._nanoValue < rhs._nanoValue
     }
     
     public static func <<= <RHS>(lhs: inout Coins, rhs: RHS) where RHS : BinaryInteger {
-        lhs.amount <<= rhs
+        lhs._nanoValue <<= rhs
     }
     
     public static func >>= <RHS>(lhs: inout Coins, rhs: RHS) where RHS : BinaryInteger {
-        lhs.amount >>= rhs
+        lhs._nanoValue >>= rhs
     }
     
     public static func /= (lhs: inout Coins, rhs: Coins) {
-        lhs.amount /= rhs.amount
+        lhs._nanoValue /= rhs.nanoValue
     }
     
     public static func *= (lhs: inout Coins, rhs: Coins) {
-        lhs.amount *= rhs.amount
+        lhs._nanoValue *= rhs.nanoValue
     }
     
     public static func %= (lhs: inout Coins, rhs: Coins) {
-        lhs.amount %= rhs.amount
+        lhs._nanoValue %= rhs.nanoValue
     }
     
     public static func &= (lhs: inout Coins, rhs: Coins) {
-        lhs.amount &= rhs.amount
+        lhs._nanoValue &= rhs.nanoValue
     }
     
     public static func |= (lhs: inout Coins, rhs: Coins) {
-        lhs.amount |= rhs.amount
+        lhs._nanoValue |= rhs.nanoValue
     }
     
     public static func ^= (lhs: inout Coins, rhs: Coins) {
-        lhs.amount ^= rhs.amount
+        lhs._nanoValue ^= rhs.nanoValue
     }
     
     prefix public static func ~ (x: Coins) -> Coins {
-        .init(~x.amount)
+        .init(nanoValue: ~x.nanoValue, decimals: x.decimals)
     }
     
     public static func * (lhs: Coins, rhs: Coins) -> Coins {
-        .init(lhs.amount * rhs.amount)
+        .init(nanoValue: lhs.nanoValue * rhs.nanoValue, decimals: lhs.decimals)
     }
     
     public static func + (lhs: Coins, rhs: Coins) -> Coins {
-        .init(lhs.amount + rhs.amount)
+        .init(nanoValue: lhs.nanoValue + rhs.nanoValue, decimals: lhs.decimals)
     }
     
     public static func - (lhs: Coins, rhs: Coins) -> Coins {
-        .init(lhs.amount - rhs.amount)
+       .init(nanoValue: lhs.nanoValue - rhs.nanoValue, decimals: lhs.decimals)
     }
     
     public static func / (lhs: Coins, rhs: Coins) -> Coins {
-        .init(lhs.amount / rhs.amount)
+        .init(nanoValue: lhs.nanoValue / rhs.nanoValue, decimals: lhs.decimals)
     }
     
     public static func % (lhs: Coins, rhs: Coins) -> Coins {
-        .init(lhs.amount % rhs.amount)
+        .init(nanoValue: lhs.nanoValue % rhs.nanoValue, decimals: lhs.decimals)
     }
 }
 
@@ -247,9 +257,11 @@ public extension String {
         }
         
         let coins = try Coins(nanoValue: result, decimals: decimals)
-        if coins > BigInt("340282366920938463463374607431768211455") {
-            throw ErrorTonSdkSwift("toNanoCrystals: value \(coins) > UInt128.max 340282366920938463463374607431768211455")
-        }
+//        if coins.nanoValue > BigInt("340282366920938463463374607431768211455") {
+//            throw ErrorTonSdkSwift("toNanoCrystals: value \(coins) > UInt128.max 340282366920938463463374607431768211455")
+//        }
         return coins
     }
 }
+
+

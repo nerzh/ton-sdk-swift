@@ -121,6 +121,7 @@ public struct Address: Equatable {
             throw ErrorTonSdkSwift("Bad Raw address: \(address)")
         }
         let hex: String = .init(data[1])
+        
         let hash: Data = try hex.hexToBytes()
         
         return (bounceable: false, testOnly: false, workchain: workchain, hash: hash, type: .raw)
