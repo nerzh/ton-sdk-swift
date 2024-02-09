@@ -256,6 +256,8 @@ public extension String {
             }
         }
         
+        result = result.isEmpty ? "0" : result
+        
         let coins = try Coins(nanoValue: result, decimals: decimals)
 //        if coins.nanoValue > BigInt("340282366920938463463374607431768211455") {
 //            throw ErrorTonSdkSwift("toNanoCrystals: value \(coins) > UInt128.max 340282366920938463463374607431768211455")
