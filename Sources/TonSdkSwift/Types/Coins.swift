@@ -126,7 +126,7 @@ public struct Coins {
             }
         }
 
-        return floatString.replace(#"(\.|)0+$"#, "")
+        return floatString == "0" ? floatString : floatString.replace(#"(\.|)0+$"#, "")
     }
 }
 

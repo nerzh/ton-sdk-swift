@@ -162,4 +162,6 @@ final class CellBuilderTests: XCTestCase {
         builer = CellBuilder.init()
         XCTAssertThrowsError(try builer.storeString(String(repeating: "1", count: 128)))
     }
+    
+    #warning("ADD TESTS FOR DICT")
 }

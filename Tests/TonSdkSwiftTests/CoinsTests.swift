@@ -35,5 +35,10 @@ final class CoinsTests: XCTestCase {
         XCTAssertEqual(coins.nanoValue, 10)
         XCTAssertEqual(coins.coinsValue, 0.1)
         XCTAssertEqual(coins.toFloatString, "0.1")
+        
+        coins = .init(coinsValue: Decimal(0), decimals: 0)
+        XCTAssertEqual(coins.nanoValue, 0)
+        XCTAssertEqual(coins.coinsValue, 0)
+        XCTAssertEqual(coins.toFloatString, "0")
     }
 }
