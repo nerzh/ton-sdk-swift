@@ -109,8 +109,10 @@ public struct Coins {
         let balanceCount = String(self.nanoValue).count
         let different = balanceCount - decimals
         var floatString = ""
+        var isFloat: Bool = false
         if different <= 0 {
             floatString = "0."
+            isFloat = true
             for _ in 0..<different * -1 {
                 floatString.append("0")
             }
@@ -120,13 +122,17 @@ public struct Coins {
             for char in String(self.nanoValue) {
                 if counter == 0 {
                     floatString.append(".")
+                    isFloat = true
                 }
                 floatString.append(char)
                 counter -= 1
             }
         }
 
-        return floatString == "0" ? floatString : floatString.replace(#"(\.|)0+$"#, "")
+        if isFloat {
+            floatString = floatString.replace(#"(\.+|0+|\.0+)$"#, "")
+        }
+        return floatString
     }
 }
 
@@ -216,7 +222,7 @@ public extension String {
     }
     
     func toCoinsThrowing(decimals: Int) throws -> Coins {
-        if decimals < 0 { throw ErrorTonSdkSwift("toNanoCrystals: negative decimals \(decimals)") }
+        if decimals < 0 { throw ErrorTonSdkSwift("toCoinsThrowing: negative decimals \(decimals)") }
         let balance: String = self.replace(#","#, ".").replace(#"\.$"#, "")
         
         var result: String = ""

@@ -40,5 +40,16 @@ final class CoinsTests: XCTestCase {
         XCTAssertEqual(coins.nanoValue, 0)
         XCTAssertEqual(coins.coinsValue, 0)
         XCTAssertEqual(coins.toFloatString, "0")
+        
+        coins = try .init(nanoValue: "50000000000", decimals: 0)
+        XCTAssertEqual(coins.toFloatString, "50000000000")
+        XCTAssertEqual(coins.nanoValue, 50_000_000_000)
+        XCTAssertEqual(coins.coinsValue, 50_000_000_000)
+        
+        
+        coins = .init(coinsValue: Decimal(50_000_000_000), decimals: 0)
+        XCTAssertEqual(coins.nanoValue, 50_000_000_000)
+        XCTAssertEqual(coins.coinsValue, 50_000_000_000)
+        XCTAssertEqual(coins.toFloatString, "50000000000")
     }
 }
