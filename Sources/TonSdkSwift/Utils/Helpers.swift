@@ -36,8 +36,8 @@ public extension BigUInt {
 
 public extension String {
     
-    func hexToBits() -> Bits {
-        var result: Bits = .init()
+    func hexToBits() -> [Bit] {
+        var result: [Bit] = .init()
         
         for val in self {
             if let chunk = Int(String(val), radix: 16) {
@@ -77,6 +77,10 @@ public extension String {
         return .init(bytes)
     }
     
+    func hexToBytesUnsafe() -> Data {
+        try! hexToBytes()
+    }
+    
     func hexToDataString() throws -> String {
         try hexToBytes().toString()
     }
@@ -103,7 +107,7 @@ public extension Data {
         BigUInt(self)
     }
     
-    func toBits() -> Bits {
+    func toBits() -> [Bit] {
         var result: [UInt8] = []
         
         result = self.bytes.reduce(into: []) { acc, uint in

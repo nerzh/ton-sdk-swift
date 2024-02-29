@@ -9,10 +9,10 @@ import Foundation
 import BigInt
 
 public struct CellSlice {
-    public var bits: Bits
+    public var bits: [Bit]
     public var refs: [Cell]
     
-    public init(bits: Bits, refs: [Cell]) {
+    public init(bits: [Bit], refs: [Cell]) {
         self.bits = bits
         self.refs = refs
     }
@@ -41,6 +41,11 @@ public struct CellSlice {
         return isEmpty ? try skipRefs(size: 1) : self
     }
     
+    @discardableResult
+    public mutating func skip(size: Int) throws -> Self {
+        try skipBits(size: size)
+    }
+    
     public mutating func loadRef() throws -> Cell {
         if refs.isEmpty {
             throw ErrorTonSdkSwift("Slice: refs overflow.")
@@ -65,7 +70,7 @@ public struct CellSlice {
         try preloadBit().rawValue == 1 ? try preloadRef() : nil
     }
     
-    public mutating func loadBit() throws -> Bits.Bit {
+    public mutating func loadBit() throws -> Bit {
         if bits.isEmpty {
             throw ErrorTonSdkSwift("Slice: bits overflow.")
         }
@@ -73,7 +78,7 @@ public struct CellSlice {
         return bits.removeFirst()
     }
     
-    public func preloadBit() throws -> Bits.Bit {
+    public func preloadBit() throws -> Bit {
         if bits.isEmpty {
             throw ErrorTonSdkSwift("Slice: bits overflow.")
         }
@@ -81,7 +86,7 @@ public struct CellSlice {
         return bits[0]
     }
     
-    public mutating func loadBits(size: Int) throws -> Bits {
+    public mutating func loadBits(size: Int) throws -> [Bit] {
         if size < 0 || bits.count < size {
             throw ErrorTonSdkSwift("Slice: bits overflow.")
         }
@@ -89,7 +94,7 @@ public struct CellSlice {
         return bits.shift(size)
     }
     
-    public func preloadBits(size: Int) throws -> Bits {
+    public func preloadBits(size: Int) throws -> [Bit] {
         if size < 0 || bits.count < size {
             throw ErrorTonSdkSwift("Slice: bits overflow.")
         }
@@ -136,7 +141,7 @@ public struct CellSlice {
         let sizeBits = sizeBytes * 8
         let bits = try preloadBits(size: size + Int(sizeBits))[size...]
         
-        return Bits(bits).toBigInt()
+        return [Bit](bits).toBigInt()
     }
     
     public mutating func loadVarBigUInt(length: Int) throws -> BigUInt {
@@ -158,7 +163,7 @@ public struct CellSlice {
         let sizeBits = sizeBytes * 8
         let bits = try preloadBits(size: size + Int(sizeBits))[size...]
         
-        return Bits(bits).toBigUInt()
+        return [Bit](bits).toBigUInt()
     }
     
     public mutating func loadBytes(size: Int) throws -> Data {
@@ -188,8 +193,8 @@ public struct CellSlice {
     }
     
     public mutating func loadAddress() throws -> Address? {
-        let flagAddressNo: Bits = .init([0, 0])
-        let flagAddress: Bits = .init([1, 0])
+        let flagAddressNo: [Bit] = .init([0, 0])
+        let flagAddress: [Bit] = .init([1, 0])
         let flag = try preloadBits(size: 2)
         
         if flag == flagAddressNo {
@@ -204,8 +209,8 @@ public struct CellSlice {
             // Anycast is currently unused
             _ = bits.popFirst()
             
-            let workchain = Bits(bits[..<8]).toBigInt()
-            let hash = try Bits(bits[8..<264]).toHex()
+            let workchain = [Bit](bits[..<8]).toBigInt()
+            let hash = try [Bit](bits[8..<264]).toHex()
             let raw = "\(workchain):\(hash)"
             
             return try Address(address: raw)
@@ -215,8 +220,8 @@ public struct CellSlice {
     }
     
     public func preloadAddress() throws -> Address? {
-        let flagAddressNo: Bits = .init([0, 0])
-        let flagAddress: Bits = .init([1, 0])
+        let flagAddressNo: [Bit] = .init([0, 0])
+        let flagAddress: [Bit] = .init([1, 0])
         let flag = try preloadBits(size: 2)
         
         if flag == flagAddressNo {
@@ -230,8 +235,8 @@ public struct CellSlice {
             // Anycast is currently unused
             _ = bits.popFirst()
             
-            let workchain = Bits(bits[..<8]).toBigInt()
-            let hash = try Bits(bits[8..<264]).toHex()
+            let workchain = [Bit](bits[..<8]).toBigInt()
+            let hash = try [Bit](bits[8..<264]).toHex()
             let raw = "\(workchain):\(hash)"
             
             return try Address(address: raw)

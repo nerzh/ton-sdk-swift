@@ -12,7 +12,7 @@ import BigInt
 open class CellBuilder {
     public var size: Int
     public var refs: [Cell]
-    public var bits: Bits
+    public var bits: [Bit]
 
     public func bytes() throws -> Data {
         try bits.toBytes()
@@ -71,7 +71,7 @@ open class CellBuilder {
     }
 
     @discardableResult
-    public func storeBit(_ bit: Bits.Bit) throws -> Self {
+    public func storeBit(_ bit: Bit) throws -> Self {
         try checkBitsOverflow(1)
         bits.append(bit)
 
@@ -79,7 +79,7 @@ open class CellBuilder {
     }
 
     @discardableResult
-    public func storeBits(_ bits: Bits) throws -> Self {
+    public func storeBits(_ bits: [Bit]) throws -> Self {
         try checkBitsOverflow(bits.count)
         self.bits.append(contentsOf: bits)
 
@@ -167,11 +167,11 @@ open class CellBuilder {
 
     @discardableResult
     public func storeAddress(_ address: Address? = nil) throws -> Self {
-        guard let address = address else {
+        guard let address else {
             try storeBits(.init([0, 0]))
             return self
         }
-
+        
         let anycast = 0
         let addressBitsSize = 2 + 1 + 8 + 256
         
@@ -239,7 +239,8 @@ open class CellBuilder {
         let bits = (0..<size).map { i in
             ((value >> i) & 1) == 1 ? 1 : 0
         }.reversed()
-        try storeBits(Bits(bits.map { UInt8($0) }))
+        
+        try storeBits([Bit](bits.map { UInt8($0) }))
         
         return self
     }
@@ -249,7 +250,7 @@ open class CellBuilder {
         let bits = (0..<size).map { i in
             ((value >> i) & 1) == 1 ? 1 : 0
         }.reversed()
-        try storeBits(Bits(bits.map { UInt8($0) }))
+        try storeBits([Bit](bits.map { UInt8($0) }))
         
         return self
     }

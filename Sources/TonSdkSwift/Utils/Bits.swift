@@ -9,34 +9,53 @@ import Foundation
 import BigInt
 import SwiftExtensionsPack
 
-public struct Bits: Equatable {
+public enum Bit: UInt8, Comparable, LosslessStringConvertible {
+    case b0 = 0
+    case b1 = 1
     
-    public enum Bit: UInt8, Comparable {
-        case b0 = 0
-        case b1 = 1
-        
-        public static func < (lhs: Bit, rhs: Bit) -> Bool {
-            lhs.rawValue < rhs.rawValue
+    public var description: String { String(rawValue) }
+    
+    public init?(_ description: String) {
+        guard
+            let intValue = UInt8(description),
+            let value = Self.init(rawValue: intValue)
+        else {
+            return nil
         }
-    }
-
-    public var bits: [Bit]
-    public var bitsUInt8: [UInt8] {
-        bits.map { $0.rawValue }
-    }
-
-    public init(_ bits: [Bit]) {
-        self.bits = bits
+        self = value
     }
     
-    public init(_ bits: [UInt8]) {
-        self.bits = bits.map { $0 < 1 ? .b0 : .b1 }
+    public init(_ bit: any SignedInteger) throws {
+        let intValue = Int(bit)
+        if !(intValue == 0 || intValue == 1) {
+            throw ErrorTonSdkSwift("Incorrectly bit")
+        }
+        let unsignedValue: UInt8 = .init(bit)
+        guard let value = Self(rawValue: unsignedValue) else {
+            throw ErrorTonSdkSwift("Unknown bit")
+        }
+        self = value
     }
     
-    public func augment(divider: Int = 8) -> Self {
+    public static func < (lhs: Bit, rhs: Bit) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
+
+public extension Array where Element == Bit {
+    
+    var bitsUInt8: [UInt8] {
+        map { $0.rawValue }
+    }
+    
+    init(_ bits: [UInt8]) {
+        self = bits.map { $0 < 1 ? .b0 : .b1 }
+    }
+    
+    func augment(divider: Int = 8) -> Self {
         var bitsCopy = self
         let amount = divider - (count % divider)
-        var overage = Bits(repeating: .b0, count: amount)
+        var overage: [Bit] = .init(repeating: .b0, count: amount)
         overage[0] = .b1
 
         if overage.count != 0 && overage.count != divider {
@@ -46,33 +65,42 @@ public struct Bits: Equatable {
         return bitsCopy
     }
     
-    public func rollback() throws -> Self {
-        guard let index = suffix(7).reversed().firstIndex(of: .b1) else {
-            throw ErrorTonSdkSwift("Incorrectly augmented bits.")
+    func rollback() throws -> Self {
+        var oneBitExist: Bool = false
+        var index = count - 1
+        var result: [Bit] = .init()
+        while index >= 0 {
+            let element: Bit = self[index]
+            if !oneBitExist, element == .b1 {
+                oneBitExist = true
+                index -= 1
+                continue
+            }
+            if oneBitExist {
+                result.append(element)
+            }
+            index -= 1
         }
         
-        return Bits(prefix(count - (index + 1)))
-    }
-    
-    public mutating func selfRollback() throws {
-        guard let index = suffix(7).reversed().firstIndex(of: .b1) else {
-            throw ErrorTonSdkSwift("Incorrectly augmented bits.")
-        }
+        if !oneBitExist { throw ErrorTonSdkSwift("Incorrectly augmented bits.") }
         
-        let collection: Slice<Bits> = prefix(count - (index + 1))
-        self.bits = collection.map { $0 }
+        return result.reversed()
     }
     
-    public func toBigUInt() -> BigUInt {
+    mutating func selfRollback() throws {
+        self = try rollback()
+    }
+    
+    func toBigUInt() -> BigUInt {
         var result = BigUInt(0)
-        for bit in bits {
+        for bit in self {
             result <<= 1
             result |= BigUInt(bit.rawValue)
         }
         return result
     }
     
-    public func toBigInt() -> BigInt {
+    func toBigInt() -> BigInt {
         if isEmpty { return 0 }
         
         let uint = BigInt(toBigUInt())
@@ -83,7 +111,7 @@ public struct Bits: Equatable {
         return value
     }
     
-    public func toHex() throws -> String {
+    func toHex() throws -> String {
         
         guard count % 4 == 0 else {
             throw ErrorTonSdkSwift("Bits amount must be multiple of 4")
@@ -99,44 +127,9 @@ public struct Bits: Equatable {
         return hexString
     }
     
-    public func toBytes() throws -> Data {
+    func toBytes() throws -> Data {
         try toHex().hexToBytes()
     }
-    
-    public mutating func shift(_ amount: Int) -> Self {
-        let firstShiftBits = bits.shift(amount)
-        return .init(firstShiftBits)
-    }
 }
 
-extension Bits: MutableCollection {
-    
-    public typealias Index = Int
-    public typealias Element = Bit
-    
-    public var startIndex: Int { bits.startIndex }
-    public var endIndex: Int { bits.endIndex }
 
-    public subscript(position: Int) -> Bit {
-        get {
-            bits[position]
-        }
-        set(newValue) {
-            bits[position] = newValue
-        }
-    }
-
-    public func index(after i: Int) -> Int {
-        return bits.index(after: i)
-    }
-}
-
-extension Bits: RangeReplaceableCollection {
-    public init() {
-        self.bits = []
-    }
-    
-    public mutating func replaceSubrange<C>(_ subrange: Range<Int>, with newElements: C) where C : Collection, Bit == C.Element {
-        bits.replaceSubrange(subrange, with: newElements)
-    }
-}
