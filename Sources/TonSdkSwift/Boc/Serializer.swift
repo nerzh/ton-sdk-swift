@@ -14,53 +14,99 @@ open class Serializer {
     static let LEAN_BOC_MAGIC_PREFIX = "68FF65F3".hexToBytesUnsafe()
     static let LEAN_BOC_MAGIC_PREFIX_CRC = "ACC3A728".hexToBytesUnsafe()
 
-    struct BOCOptions {
-        var hasIndex: Bool?
-        var hashCrc32: Bool?
-        var hasCacheBits: Bool?
-        var topologicalOrder: String?
-        var flags: Int?
+    public struct BOCOptions {
+        public var hasIndex: Bool?
+        public var hashCrc32: Bool?
+        public var hasCacheBits: Bool?
+        public var topologicalOrder: String?
+        public var flags: Int?
+        
+        public init(hasIndex: Bool? = nil, hashCrc32: Bool? = nil, hasCacheBits: Bool? = nil, topologicalOrder: String? = nil, flags: Int? = nil) {
+            self.hasIndex = hasIndex
+            self.hashCrc32 = hashCrc32
+            self.hasCacheBits = hasCacheBits
+            self.topologicalOrder = topologicalOrder
+            self.flags = flags
+        }
     }
 
-    struct BocHeader {
-        var hasIndex: Bool
-        var hashCrc32: Int?
-        var hasCacheBits: Bool
-        var flags: UInt8
-        var sizeBytes: Int
-        var offsetBytes: UInt8
-        var cellsNum: BigUInt
-        var rootsNum: BigUInt
-        var absentNum: BigUInt
-        var totCellsSize: BigUInt
-        var rootList: [BigUInt]
-        var cellsData: Data
+    public struct BocHeader {
+        public var hasIndex: Bool
+        public var hashCrc32: Int?
+        public var hasCacheBits: Bool
+        public var flags: UInt8
+        public var sizeBytes: Int
+        public var offsetBytes: UInt8
+        public var cellsNum: BigUInt
+        public var rootsNum: BigUInt
+        public var absentNum: BigUInt
+        public var totCellsSize: BigUInt
+        public var rootList: [BigUInt]
+        public var cellsData: Data
+        
+        public init(hasIndex: Bool, hashCrc32: Int? = nil, hasCacheBits: Bool, flags: UInt8, sizeBytes: Int, offsetBytes: UInt8, cellsNum: BigUInt, rootsNum: BigUInt, absentNum: BigUInt, totCellsSize: BigUInt, rootList: [BigUInt], cellsData: Data) {
+            self.hasIndex = hasIndex
+            self.hashCrc32 = hashCrc32
+            self.hasCacheBits = hasCacheBits
+            self.flags = flags
+            self.sizeBytes = sizeBytes
+            self.offsetBytes = offsetBytes
+            self.cellsNum = cellsNum
+            self.rootsNum = rootsNum
+            self.absentNum = absentNum
+            self.totCellsSize = totCellsSize
+            self.rootList = rootList
+            self.cellsData = cellsData
+        }
     }
 
-    struct CellNode {
-        var cell: Cell
-        var children: Int
-        var scanned: Int
+    public struct CellNode {
+        public var cell: Cell
+        public var children: Int
+        public var scanned: Int
+        
+        public init(cell: Cell, children: Int, scanned: Int) {
+            self.cell = cell
+            self.children = children
+            self.scanned = scanned
+        }
     }
 
-    struct BuilderNode {
-        var builder: CellBuilder
-        var indent: Int
+    public struct BuilderNode {
+        public var builder: CellBuilder
+        public var indent: Int
+        
+        public init(builder: CellBuilder, indent: Int) {
+            self.builder = builder
+            self.indent = indent
+        }
     }
 
-    struct CellPointer {
-        var cell: Cell?
-        var type: Cell.CellType
-        var builder: CellBuilder
-        var refs: [BigUInt]
+    public struct CellPointer {
+        public var cell: Cell?
+        public var type: Cell.CellType
+        public var builder: CellBuilder
+        public var refs: [BigUInt]
+        
+        public init(cell: Cell? = nil, type: Cell.CellType, builder: CellBuilder, refs: [BigUInt]) {
+            self.cell = cell
+            self.type = type
+            self.builder = builder
+            self.refs = refs
+        }
     }
 
-    struct CellData {
-        var pointer: CellPointer
-        var remainder: Data
+    public struct CellData {
+        public var pointer: CellPointer
+        public var remainder: Data
+        
+        public init(pointer: Serializer.CellPointer, remainder: Data) {
+            self.pointer = pointer
+            self.remainder = remainder
+        }
     }
 
-    class func deserializeFift(data: String) throws -> [Cell] {
+    public class func deserializeFift(data: String) throws -> [Cell] {
         guard !data.isEmpty else {
             throw ErrorTonSdkSwift("Can't deserialize. Empty fift hex.")
         }
@@ -121,16 +167,17 @@ open class Serializer {
     }
     
     
-    class func deserializeHeader(bytes: Data) throws -> BocHeader {
+    public class func deserializeHeader(bytes: Data) throws -> BocHeader {
         guard bytes.count >= 4 + 1 else {
             throw ErrorTonSdkSwift("Not enough bytes for magic prefix")
         }
 
         let crcbytes = bytes[0..<bytes.count - 4]
         var mutableBytes = bytes
-        let prefix = mutableBytes[0..<4]
+        let prefix = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + 4]
         mutableBytes.removeFirst(4)
         let flagsByte = mutableBytes.removeFirst()
+        
         var header = BocHeader(hasIndex: true,
                                hashCrc32: nil,
                                hasCacheBits: false,
@@ -163,13 +210,13 @@ open class Serializer {
         }
 
         let offsetBytes = mutableBytes.removeFirst()
-        header.cellsNum = mutableBytes[0..<header.sizeBytes].toBigUInt()
+        header.cellsNum = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + header.sizeBytes].toBigUInt()
         mutableBytes.removeFirst(header.sizeBytes)
-        header.rootsNum = mutableBytes[0..<header.sizeBytes].toBigUInt()
+        header.rootsNum = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + header.sizeBytes].toBigUInt()
         mutableBytes.removeFirst(header.sizeBytes)
-        header.absentNum = mutableBytes[0..<header.sizeBytes].toBigUInt()
+        header.absentNum = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + header.sizeBytes].toBigUInt()
         mutableBytes.removeFirst(header.sizeBytes)
-        header.totCellsSize = mutableBytes[0..<Int(offsetBytes)].toBigUInt()
+        header.totCellsSize = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + Int(offsetBytes)].toBigUInt()
         mutableBytes.removeFirst(Int(offsetBytes))
         header.offsetBytes = offsetBytes
         
@@ -178,7 +225,7 @@ open class Serializer {
         }
 
         header.rootList = (0..<header.rootsNum).map { _ in
-            let refIndex = mutableBytes[0..<header.sizeBytes].toBigUInt()
+            let refIndex = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + header.sizeBytes].toBigUInt()
             mutableBytes.removeFirst(header.sizeBytes)
             return refIndex
         }
@@ -194,7 +241,7 @@ open class Serializer {
             throw ErrorTonSdkSwift("not enough bytes for cells data")
         }
         
-        header.cellsData = mutableBytes[0..<Int(header.totCellsSize)]
+        header.cellsData = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + Int(header.totCellsSize)]
         mutableBytes.removeFirst(Int(header.totCellsSize))
 
         if header.hashCrc32 != nil && header.hashCrc32 != 0 {
@@ -204,9 +251,9 @@ open class Serializer {
 
             let result = crcbytes.crc32cBytesLE()
 
-            let crc32Bytes = mutableBytes[0..<4]
+            let crc32Bytes = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + 4]
             mutableBytes.removeFirst(4)
-
+            
             if !(result == crc32Bytes) {
                 throw ErrorTonSdkSwift("crc32c hashsum mismatch")
             }
@@ -220,7 +267,7 @@ open class Serializer {
     }
     
     
-    class func deserializeCell(remainder: Data, refIndexSize: Int) throws -> CellData {
+    public class func deserializeCell(remainder: Data, refIndexSize: Int) throws -> CellData {
         guard remainder.count >= 2 else {
             throw ErrorTonSdkSwift("Not enough bytes to encode cell descriptors")
         }
@@ -261,7 +308,11 @@ open class Serializer {
             mutableRemainder.removeFirst(hashesSize + depthSize)
         }
 
-        let bits = isAugmented ? try mutableRemainder[0..<dataSize].toBits().rollback() : mutableRemainder[0..<dataSize].toBits()
+        let bits = if isAugmented  {
+            try mutableRemainder[mutableRemainder.startIndex..<mutableRemainder.startIndex + dataSize].toBits().rollback()
+        } else {
+            mutableRemainder[mutableRemainder.startIndex..<mutableRemainder.startIndex + dataSize].toBits()
+        }
 
         if isExotic && bits.count < 8 {
             throw ErrorTonSdkSwift("Not enough bytes for an exotic cell type")
@@ -282,17 +333,18 @@ open class Serializer {
         }
 
         let refs = (0..<Int(totalRefs)).map { _ in
-            let refBytes = mutableRemainder[0..<refIndexSize]
+            let refBytes = mutableRemainder[mutableRemainder.startIndex..<mutableRemainder.startIndex + refIndexSize]
             mutableRemainder.removeFirst(refIndexSize)
             return refBytes.toBigUInt()
         }
 
         let pointer = try CellPointer(type: type, builder: CellBuilder(size: bits.count).storeBits(bits), refs: refs)
         
+        
         return CellData(pointer: pointer, remainder: mutableRemainder)
     }
 
-    class func deserialize(data: Data, checkMerkleProofs: Bool) throws -> [Cell] {
+    public class func deserialize(data: Data, checkMerkleProofs: Bool = false) throws -> [Cell] {
         var hasMerkleProofs = false
         var pointers: [CellPointer] = []
         let header: BocHeader = try deserializeHeader(bytes: data)
@@ -307,14 +359,15 @@ open class Serializer {
             remainder = deserialized.remainder
             pointers.append(deserialized.pointer)
         }
+        
 
-        for i in (0..<pointers.count).reversed() {
-            let pointerIndex = pointers.count - i - 1
-            var pointer = pointers[pointerIndex]
-            let cellBuilder = pointer.builder
-            let cellType = pointer.type
+        for index in 0..<pointers.count {
+            let pointerIndex = pointers.count - index - 1
+            let cellBuilder = pointers[pointerIndex].builder
+            let cellType = pointers[pointerIndex].type
+//            print(index)
 
-            for refIndex in pointer.refs {
+            for refIndex in pointers[pointerIndex].refs {
                 let refBuilder = pointers[Int(refIndex)].builder
                 let refType = pointers[Int(refIndex)].type
 
@@ -333,7 +386,7 @@ open class Serializer {
                 hasMerkleProofs = true
             }
 
-            pointer.cell = try cellBuilder.cell(cellType)
+            pointers[pointerIndex].cell = try cellBuilder.cell(cellType)
         }
 
         if checkMerkleProofs && !hasMerkleProofs {
@@ -350,9 +403,8 @@ open class Serializer {
         }
     }
     
-    class func depthFirstSort(root: [Cell]) throws -> (cells: [Cell], hashmap: [String: Int]) {
+    public class func depthFirstSort(root: [Cell]) throws -> (cells: [Cell], hashmap: [String: Int]) {
         #warning("fix multiple root cells serialization")
-
         var stack: [CellNode] = [CellNode(cell: try Cell(refs: root), children: root.count, scanned: 0)]
         var cells: [(cell: Cell, hash: String)] = []
         var hashIndexes: [String: Int] = [:]
@@ -361,7 +413,7 @@ open class Serializer {
         func process(node: CellNode) throws {
             var node = node
             node.scanned += 1
-            var ref = node.cell.refs[node.scanned]
+            let ref = node.cell.refs[node.scanned]
             
 
             let hash = try ref.hash()
@@ -404,7 +456,7 @@ open class Serializer {
     }
 
 
-    class func breadthFirstSort(root: [Cell]) throws -> (cells: [Cell], hashmap: [String: Int]) {
+    public class func breadthFirstSort(root: [Cell]) throws -> (cells: [Cell], hashmap: [String: Int]) {
         var queue = root
         var cells: [(cell: Cell, hash: String)] = try root.map { ($0, try $0.hash()) }
         var hashIndexes: [String: Int] = Dictionary(uniqueKeysWithValues: cells.enumerated().map { ($1.hash, $0) })
@@ -446,7 +498,7 @@ open class Serializer {
     }
     
     
-    class func serializeCell(cell: Cell, hashmap: [String: Int], refIndexSize: Int) throws -> [Bit] {
+    public class func serializeCell(cell: Cell, hashmap: [String: Int], refIndexSize: Int) throws -> [Bit] {
         let representation = cell.getRefsDescriptor() + cell.getBitsDescriptor() + cell.getAugmentedBits()
         let serialized = try cell.refs.reduce(into: representation) { acc, ref in
             if let refIndex = hashmap[try ref.hash()] {
@@ -459,7 +511,7 @@ open class Serializer {
         return serialized
     }
 
-    class func serialize(root: [Cell], options: BOCOptions = .init()) throws -> Data {
+    public class func serialize(root: [Cell], options: BOCOptions = .init()) throws -> Data {
         // TODO: test more than 1 root cells support
         let hasIndex = options.hasIndex ?? false
         let hasCacheBits = options.hasCacheBits ?? false

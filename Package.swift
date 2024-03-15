@@ -8,8 +8,10 @@ let name: String = "TonSdkSwift"
 var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/nerzh/swift-regular-expression.git", .upToNextMajor(from: "0.2.3")),
     .package(url: "https://github.com/bytehubio/BigInt.git", exact: "5.3.0"),
-    .package(url: "https://github.com/nerzh/swift-extensions-pack.git", .upToNextMajor(from: "1.16.1")),
+    .package(url: "https://github.com/nerzh/swift-extensions-pack.git", .upToNextMajor(from: "1.19.1")),
     .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "3.0.0"),
+    .package(url: "https://github.com/bytehubio/CryptoSwift", .upToNextMajor(from: "1.8.1")),
+    .package(url: "https://github.com/nerzh/swift-net-layer", .upToNextMajor(from: "1.3.2")),
 ]
 
 var mainTarget: [Target.Dependency] = [
@@ -17,18 +19,19 @@ var mainTarget: [Target.Dependency] = [
     .product(name: "SwiftExtensionsPack", package: "swift-extensions-pack"),
     .product(name: "BigInt", package: "BigInt"),
     .product(name: "Crypto", package: "swift-crypto"),
+    .product(name: "CryptoSwift", package: "CryptoSwift"),
+    .product(name: "SwiftNetLayer", package: "swift-net-layer"),
 ]
 
 var testTarget: [Target.Dependency] = mainTarget + [
     .init(stringLiteral: name)
 ]
 
-
 let package = Package(
     name: name,
     platforms: [
-        .macOS(.v11),
-        .iOS(.v13),
+        .macOS(.v13),
+        .iOS(.v13)
     ],
     products: [
         .library(
@@ -47,3 +50,5 @@ let package = Package(
         ),
     ]
 )
+
+

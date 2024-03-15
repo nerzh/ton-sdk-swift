@@ -8,7 +8,7 @@
 import Foundation
 import BigInt
 
-public struct CellSlice {
+open class CellSlice: Equatable {
     public var bits: [Bit]
     public var refs: [Cell]
     
@@ -17,8 +17,13 @@ public struct CellSlice {
         self.refs = refs
     }
     
+    public static func == (lhs: CellSlice, rhs: CellSlice) -> Bool {
+        lhs.bits == rhs.bits &&
+        lhs.refs == rhs.refs
+    }
+    
     @discardableResult
-    public mutating func skipBits(size: Int) throws -> Self {
+    public func skipBits(size: Int) throws -> Self {
         if bits.count < size {
             throw ErrorTonSdkSwift("Slice: bits overflow.")
         }
@@ -27,7 +32,7 @@ public struct CellSlice {
         return self
     }
     
-    public mutating func skipRefs(size: Int) throws -> Self {
+    public func skipRefs(size: Int) throws -> Self {
         if refs.count < size {
             throw ErrorTonSdkSwift("Slice: refs overflow.")
         }
@@ -36,17 +41,17 @@ public struct CellSlice {
         return self
     }
     
-    public mutating func skipDict() throws -> Self {
+    public func skipDict() throws -> Self {
         let isEmpty = try loadBit().rawValue == 0
         return isEmpty ? try skipRefs(size: 1) : self
     }
     
     @discardableResult
-    public mutating func skip(size: Int) throws -> Self {
+    public func skip(size: Int) throws -> Self {
         try skipBits(size: size)
     }
     
-    public mutating func loadRef() throws -> Cell {
+    public func loadRef() throws -> Cell {
         if refs.isEmpty {
             throw ErrorTonSdkSwift("Slice: refs overflow.")
         }
@@ -62,7 +67,7 @@ public struct CellSlice {
         return refs[0]
     }
     
-    public mutating func loadMaybeRef() throws -> Cell? {
+    public func loadMaybeRef() throws -> Cell? {
         try loadBit().rawValue == 1 ? try loadRef() : nil
     }
     
@@ -70,7 +75,7 @@ public struct CellSlice {
         try preloadBit().rawValue == 1 ? try preloadRef() : nil
     }
     
-    public mutating func loadBit() throws -> Bit {
+    public func loadBit() throws -> Bit {
         if bits.isEmpty {
             throw ErrorTonSdkSwift("Slice: bits overflow.")
         }
@@ -86,7 +91,7 @@ public struct CellSlice {
         return bits[0]
     }
     
-    public mutating func loadBits(size: Int) throws -> [Bit] {
+    public func loadBits(size: Int) throws -> [Bit] {
         if size < 0 || bits.count < size {
             throw ErrorTonSdkSwift("Slice: bits overflow.")
         }
@@ -102,7 +107,7 @@ public struct CellSlice {
         return copyBits.shift(size)
     }
     
-    public mutating func loadBigInt(size: Int) throws -> BigInt {
+    public func loadBigInt(size: Int) throws -> BigInt {
         let bits = try loadBits(size: size)
         return bits.toBigInt()
     }
@@ -112,7 +117,7 @@ public struct CellSlice {
         return bits.toBigInt()
     }
     
-    public mutating func loadBigUInt(size: Int) throws -> BigUInt {
+    public func loadBigUInt(size: Int) throws -> BigUInt {
         let bits = try loadBits(size: size)
         return bits.toBigUInt()
     }
@@ -122,7 +127,7 @@ public struct CellSlice {
         return bits.toBigUInt()
     }
     
-    public mutating func loadVarBigInt(length: Int) throws -> BigInt {
+    public func loadVarBigInt(length: Int) throws -> BigInt {
         let size = Int(ceil(log2(Double(length))))
         let sizeBytes = try preloadBigUInt(size: size)
         let sizeBits = sizeBytes * 8
@@ -144,7 +149,7 @@ public struct CellSlice {
         return [Bit](bits).toBigInt()
     }
     
-    public mutating func loadVarBigUInt(length: Int) throws -> BigUInt {
+    public func loadVarBigUInt(length: Int) throws -> BigUInt {
         let size = Int(ceil(log2(Double(length))))
         let sizeBytes = try preloadBigUInt(size: size)
         let sizeBits = sizeBytes * 8
@@ -153,7 +158,10 @@ public struct CellSlice {
             throw ErrorTonSdkSwift("Slice: can't perform loadVarBigUint – not enough bits")
         }
         
+        try skip(size: Int(size))
         let bits = try loadBits(size: Int(sizeBits))
+        
+        
         return bits.toBigUInt()
     }
     
@@ -166,7 +174,7 @@ public struct CellSlice {
         return [Bit](bits).toBigUInt()
     }
     
-    public mutating func loadBytes(size: Int) throws -> Data {
+    public func loadBytes(size: Int) throws -> Data {
         let bits = try loadBits(size: size * 8)
         return try bits.toBytes()
     }
@@ -176,7 +184,7 @@ public struct CellSlice {
         return try bits.toBytes()
     }
     
-    public mutating func loadString(size: Int? = nil) throws -> String {
+    public func loadString(size: Int? = nil) throws -> String {
         let bytes = size == nil ? try loadBytes(size: bits.count / 8) : try loadBytes(size: size!)
         guard let result = String(data: bytes, encoding: .utf8) else {
             throw ErrorTonSdkSwift("Slice: can't convert loadString")
@@ -192,7 +200,17 @@ public struct CellSlice {
         return result
     }
     
-    public mutating func loadAddress() throws -> Address? {
+    public func loadSlice(size: Int = 0) throws -> CellSlice {
+        let bits = try loadBits(size: size)
+        return CellSlice(bits: bits, refs: [])
+    }
+    
+    public func preloadSlice(size: Int = 0) throws -> CellSlice {
+        let bits = try preloadBits(size: size)
+        return CellSlice(bits: bits, refs: [])
+    }
+    
+    public func loadAddress() throws -> Address? {
         let flagAddressNo: [Bit] = .init([0, 0])
         let flagAddress: [Bit] = .init([1, 0])
         let flag = try preloadBits(size: 2)
@@ -205,12 +223,11 @@ public struct CellSlice {
             let size = 2 + 1 + 8 + 256
             // Slice 2 because we don't need flag bits
             var bits = try loadBits(size: size)[2...]
-            
             // Anycast is currently unused
             _ = bits.popFirst()
             
-            let workchain = [Bit](bits[..<8]).toBigInt()
-            let hash = try [Bit](bits[8..<264]).toHex()
+            let workchain = [Bit](bits[3..<3+8]).toBigInt()
+            let hash = try [Bit](bits[3+8..<3+8+256]).toHex()
             let raw = "\(workchain):\(hash)"
             
             return try Address(address: raw)
@@ -245,7 +262,7 @@ public struct CellSlice {
         }
     }
     
-    public mutating func loadCoins(decimals: Int = 9) throws -> Coins {
+    public func loadCoins(decimals: Int = 9) throws -> Coins {
         let coins = try loadVarBigUInt(length: 16)
         return .init(nanoValue: coins, decimals: decimals)
     }
@@ -254,38 +271,38 @@ public struct CellSlice {
         let coins = try preloadVarBigUint(length: 16)
         return .init(nanoValue: coins, decimals: decimals)
     }
-    #warning("AFTER HASHMAP_E")
-//    func loadDict(keySize: Int, options: [String: Any] = [:]) -> HashmapE {
-//        let dictConstructor = loadBit()
-//        let isEmpty = dictConstructor == 0
-//        
-//        if !isEmpty {
-//            return HashmapE.parse(
-//                keySize: keySize,
-//                slice: Slice(bits: [dictConstructor], refs: [loadRef()]),
-//                options: options
-//            )
-//        } else {
-//            return HashmapE(keySize: keySize, options: options)
-//        }
-//    }
-//    
-//    func preloadDict(keySize: Int, options: [String: Any] = [:]) -> HashmapE {
-//        let dictConstructor = preloadBit()
-//        let isEmpty = dictConstructor == 0
-//        
-//        if !isEmpty {
-//            return HashmapE.parse(
-//                keySize: keySize,
-//                slice: Slice(bits: [dictConstructor], refs: [preloadRef()]),
-//                options: options
-//            )
-//        } else {
-//            return HashmapE(keySize: keySize, options: options)
-//        }
-//    }
     
-    public static func parse(cell: Cell) -> Self {
+    public func loadDict<K,V>(keySize: Int, options: HashmapOptions<K,V>? = nil) throws -> HashmapE<K,V> {
+        let dictConstructor = try loadBit()
+        let isEmpty = dictConstructor == .b0
+        
+        if !isEmpty {
+            return try HashmapE.parse(
+                keySize: keySize,
+                slice: CellSlice(bits: [dictConstructor], refs: [loadRef()]),
+                options: options
+            )
+        } else {
+            return try HashmapE(keySize: keySize, options: options)
+        }
+    }
+    
+    public func preloadDict<K,V>(keySize: Int, options: HashmapOptions<K,V>? = nil) throws -> HashmapE<K,V> {
+        let dictConstructor = try preloadBit()
+        let isEmpty = dictConstructor == .b0
+        
+        if !isEmpty {
+            return try HashmapE.parse(
+                keySize: keySize,
+                slice: CellSlice(bits: [dictConstructor], refs: [preloadRef()]),
+                options: options
+            )
+        } else {
+            return try HashmapE(keySize: keySize, options: options)
+        }
+    }
+    
+    public static func parse(cell: Cell) -> CellSlice {
         .init(bits: cell.bits, refs: cell.refs)
     }
 }

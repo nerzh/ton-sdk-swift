@@ -196,13 +196,26 @@ open class CellBuilder {
     }
 
     @discardableResult
-    public func storeDict(_ hashmap: Cell? = nil) throws -> Self {
+    public func storeDict<K,V>(_ hashmap: Hashmap<K,V>? = nil) throws -> Self {
         guard let hashmap = hashmap else {
             try storeBit(.b0)
             return self
         }
 
-        let slice = hashmap.parse()
+        let slice = try hashmap.cell().parse()
+        try storeSlice(slice)
+
+        return self
+    }
+    
+    @discardableResult
+    public func storeDict<K,V>(_ hashmap: HashmapE<K,V>? = nil) throws -> Self {
+        guard let hashmap = hashmap else {
+            try storeBit(.b0)
+            return self
+        }
+
+        let slice = try hashmap.cell().parse()
         try storeSlice(slice)
 
         return self

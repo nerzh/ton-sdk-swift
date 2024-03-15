@@ -9,9 +9,13 @@ import Foundation
 import BigInt
 
 
-public struct Cell {
+open class Cell: Equatable {
     public static let HASH_BITS: UInt32 = 256
     public static let DEPTH_BITS: UInt32 = 16
+    
+    public static func == (lhs: Cell, rhs: Cell) -> Bool {
+        (try? lhs.hash()) == (try? rhs.hash())
+    }
     
     public enum CellType: Int8 {
         case ordinary = -1
@@ -231,7 +235,7 @@ public struct Cell {
         try initialize()
     }
 
-    private mutating func initialize() throws {
+    private func initialize() throws {
         let hasRefs = refs.count > 0
         let isMerkle = [CellType.merkleProof, CellType.merkleUpdate].contains(type)
         let isPrunedBranch = type == CellType.prunedBranch
@@ -267,13 +271,9 @@ public struct Cell {
             for ref in refs {
                 let refDepth = ref.depth(refLevel)
                 let refHash = try ref.hash(refLevel)
-
-                print(Cell.getDepthDescriptor(UInt32(refDepth)).toBigUInt().description)
                 depthRepresentation += Cell.getDepthDescriptor(UInt32(refDepth))
                 hashRepresentation += refHash.hexToBits()
                 depth = max(depth, refDepth)
-                
-                
             }
 
             let representation: [Bit] = refsDescriptor + bitsDescriptor + data + depthRepresentation + hashRepresentation
@@ -285,7 +285,7 @@ public struct Cell {
             let dest = Int(hashIndex - hashIndexOffset)
             let newDepth = depth + (hasRefs ? 1 : 0)
             
-            let newHash = try representation.toBytes().sha256()
+            let newHash: String = try representation.toBytes().sha256()
             
             if dest == 0 {
                 _depths.append(newDepth)
@@ -371,10 +371,11 @@ public struct Cell {
 
     // Print cell as fift-hex
     public func printCell(indent: Int = 1, size: Int = 0) throws -> String {
+        #warning("TODO: fix this logic")
         let bitsCopy = bits
         let areDivisible = bitsCopy.count % 4 == 0
         let augmented = areDivisible ? bitsCopy : bitsCopy.augment(divider: 4)
-        let fiftHex = "\(try augmented.toHex().uppercased())\(areDivisible ? "" : "_")"
+        let fiftHex = "\(try augmented.toHex().uppercased())\(areDivisible ? "" : "_")}"
         var output = "\(String(repeating: " ", count: indent * size))x{\(fiftHex)\n"
 
         for ref in refs {

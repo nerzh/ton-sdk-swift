@@ -1,5 +1,5 @@
 import XCTest
-@testable import TonSdkSwift
+import TonSdkSwift
 import BigInt
 
 final class BitsTests: XCTestCase {

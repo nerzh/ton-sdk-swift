@@ -7,7 +7,7 @@
 
 import Foundation
 import XCTest
-@testable import TonSdkSwift
+import TonSdkSwift
 import BigInt
 import SwiftExtensionsPack
 
@@ -131,6 +131,38 @@ final class CellBuilderTests: XCTestCase {
         XCTAssertThrowsError(try builer.storeRef(CellBuilder().cell()))
     }
     
+    func testStoreMaybeRef() async throws {
+        let b = CellBuilder()
+        try b.storeMaybeRef(CellBuilder().cell())
+        XCTAssertEqual(try b.cell().hash(), "9770d42f6d781e048a432b849b56d5329de4667b37cfb918429a23f90cb9884b")
+        
+        let b1 = CellBuilder()
+        try b1.storeMaybeRef(nil)
+        XCTAssertEqual(try b1.cell().hash(), "90aec8965afabb16ebc3cb9b408ebae71b618d78788bc80d09843593cac98da4")
+    }
+    
+    func testStoreBit() async throws {
+        let b = CellBuilder()
+        try b.storeBit(.b0)
+        XCTAssertEqual(try b.cell().hash(), "90aec8965afabb16ebc3cb9b408ebae71b618d78788bc80d09843593cac98da4")
+        
+        let b1 = CellBuilder()
+        try b1.storeBit(.b1)
+        XCTAssertEqual(try b1.cell().hash(), "7c6c1a965fd501d2938c2c0e06626bdaa3531357016e169070c9ef79c4c46bc0")
+    }
+    
+    func testStoreBits() async throws {
+        let b = CellBuilder()
+        try b.storeBits(.init([0, 1, 0, 1]))
+        XCTAssertEqual(try b.cell().hash(), "5454f2d4e0d41008f1fe171e2d982ebaa2fde5ce1e251bd4a125a3ff9986dfc4")
+    }
+    
+    func testStoreSlice() async throws {
+        let b = CellBuilder()
+        try b.storeSlice(CellBuilder().storeUInt(1, 9).cell().parse())
+        XCTAssertEqual(try b.cell().hash(), "d45cdb2727434311da48e51708f0f0536f8297e5348adf9c822f2ad2b349509d")
+    }
+    
     func testAddress() async throws {
         let builer: CellBuilder = .init()
         try builer.storeAddress(.init(address: "0:93c5a151850b16de3cb2d87782674bc5efe23e6793d343aa096384aafd70812c"))
@@ -163,5 +195,22 @@ final class CellBuilderTests: XCTestCase {
         XCTAssertThrowsError(try builer.storeString(String(repeating: "1", count: 128)))
     }
     
-    #warning("ADD TESTS FOR DICT")
+    func testStoreDict() async throws {
+        let options: HashmapOptions<BigUInt, BigUInt> = .init(serializers: (
+            key: { k in
+                return try CellBuilder().storeUInt(k, 16).bits
+            },
+            value: { v in
+                return try CellBuilder().storeUInt(v, 16).cell()
+            }
+        ))
+        let dict = try HashmapE(keySize: 16, options: options)
+        try dict.set(17, 289)
+        try dict.set(239, 57121)
+        try dict.set(32781, 169)
+        
+        let b = CellBuilder()
+        try b.storeDict(dict)
+        XCTAssertEqual(try b.cell().hash(), "863cdf82df752f65f8386646b1e92770fd3545d726762cae82e3b9a0100c501e")
+    }
 }

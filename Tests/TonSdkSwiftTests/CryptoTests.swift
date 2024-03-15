@@ -6,7 +6,7 @@
 //
 
 import XCTest
-@testable import TonSdkSwift
+import TonSdkSwift
 import BigInt
 import SwiftExtensionsPack
 import Crypto
