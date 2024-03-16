@@ -2,6 +2,13 @@
 
 Swift SDK for interaction with TON (The Open Network) blockchain
 
+| OS | Result |
+| ----------- | ----------- |
+| MacOS | ✅ |
+| Linux | ✅ |
+| iOS | ✅ |
+| Windows | ✅ |
+
 ## Installation
 
 Install ton-sdk-swift:
