@@ -1,6 +1,6 @@
 # ton-sdk-swift
 
-Ruby SDK for interaction with TON (The Open Network) blockchain
+Swift SDK for interaction with TON (The Open Network) blockchain
 
 ## Installation
 
@@ -13,6 +13,7 @@ Install ton-sdk-swift:
 ## Example
 
 ```swift
+import XCTest
 import TonSdkSwift
 
 final class ExampleTests: XCTestCase {
