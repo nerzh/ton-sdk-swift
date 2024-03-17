@@ -7,8 +7,6 @@
 
 import XCTest
 import TonSdkSwift
-import BigInt
-import Crypto
 import SwiftExtensionsPack
 
 final class JohnnyMnemonicTests: XCTestCase {

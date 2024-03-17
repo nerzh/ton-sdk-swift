@@ -7,7 +7,6 @@
 
 import Foundation
 import SwiftExtensionsPack
-//import CryptoSwift
 import enum CryptoSwift.PKCS5
 
 public final class TonMnemonic {
