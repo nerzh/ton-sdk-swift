@@ -9,7 +9,7 @@ import Foundation
 import BigInt
 import SwiftExtensionsPack
 
-public enum Bit: UInt8, Comparable, LosslessStringConvertible {
+public enum Bit: UInt8, Comparable, LosslessStringConvertible, Equatable {
     case b0 = 0
     case b1 = 1
     

@@ -121,7 +121,21 @@ public final class TonMnemonic {
         return mnemonicArray
     }
     
-    public class func mnemonicToPrivateKey(mnemonicArray: [String], password: Data? = nil) throws -> (public: Data, secret: Data) {
+    public class func mnemonicToKeyPairs(mnemonicArray: [String], password: Data? = nil) throws -> Keys {
+        let mnemonicArray = normalizeMnemonic(words: mnemonicArray)
+        guard let salt = TON_KEYS_SALT.data(using: .utf8) else {
+            throw ErrorTonSdkSwift("Bad TON_KEYS_SALT \(TON_KEYS_SALT)")
+        }
+        let seed = try mnemonicToSeed(mnemonicArray: mnemonicArray, salt: salt, password: password)
+        return try seedToKeyPairs(seed32Byte: seed[0..<32])
+    }
+    
+    public class func seedToKeyPairs(seed32Byte: Data) throws -> Keys {
+        let keyPair = SEPCrypto.Ed25519.createKeyPair(seed32Byte: seed32Byte)
+        return (public: keyPair.public, secret: seed32Byte)
+    }
+    
+    public class func mnemonicToPrivateKey(mnemonicArray: [String], password: Data? = nil) throws -> Keys {
         let mnemonicArray = normalizeMnemonic(words: mnemonicArray)
         guard let salt = TON_KEYS_SALT.data(using: .utf8) else {
             throw ErrorTonSdkSwift("Bad TON_KEYS_SALT \(TON_KEYS_SALT)")
