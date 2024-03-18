@@ -142,7 +142,7 @@ public final class TonMnemonic {
         }
         let seed = try mnemonicToSeed(mnemonicArray: mnemonicArray, salt: salt, password: password)
         let keyPair = SEPCrypto.Ed25519.createKeyPair(seed32Byte: seed[0..<32])
-        return (public: keyPair.public, secret: keyPair.secret)
+        return (public: keyPair.public, secret: seed[0..<32])
     }
     
     public class func mnemonicToSeed(mnemonicArray: [String], salt: Data, password: Data?) throws -> Data {

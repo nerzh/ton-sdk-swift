@@ -7,7 +7,7 @@
 
 import Foundation
 import BigInt
-
+import SwiftExtensionsPack
 
 open class Cell: Equatable {
     public static let HASH_BITS: UInt32 = 256
@@ -388,5 +388,12 @@ open class Cell: Equatable {
     // Checks Cell equality by comparing cell hashes
     public func isEqual(_ cell: Cell) throws -> Bool {
         (try hash()) == (try cell.hash())
+    }
+    
+    public func sign(secretKey32byte: Data) throws -> Data {
+        let keys = SEPCrypto.Ed25519.createKeyPair(seed32Byte: secretKey32byte)
+        let message = try self.hash().hexToBytes()
+        let signature = SEPCrypto.Ed25519.sign(message: message, publicKey32byte: keys.public, secretKey64byte: keys.secret)
+        return signature
     }
 }
