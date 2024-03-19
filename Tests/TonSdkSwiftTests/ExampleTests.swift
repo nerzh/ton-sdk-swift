@@ -21,13 +21,13 @@ final class ExampleTests: XCTestCase {
         try b.storeCoins(Coins(0.0001))
         
         /// End builder and serialize to boc
-        let bytes = try Serializer.serialize(root: [b.cell()])
+        let bytes = try Boc.serialize(root: [b.cell()])
         let base64 = bytes.toBase64()
         
         print("boc in base64 format:", base64)
         
         /// Deserialize base64 boc
-        let cell = try Serializer.deserialize(data: base64.base64ToBytes()).first
+        let cell = try Boc.deserialize(data: base64.base64ToBytes()).first
         
         /// Parse cell into slice
         let cs = cell?.parse()

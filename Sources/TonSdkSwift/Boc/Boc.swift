@@ -9,7 +9,7 @@ import Foundation
 import BigInt
 import SwiftExtensionsPack
 
-open class Serializer {
+open class Boc {
     static let REACH_BOC_MAGIC_PREFIX = "B5EE9C72".hexToBytesUnsafe()
     static let LEAN_BOC_MAGIC_PREFIX = "68FF65F3".hexToBytesUnsafe()
     static let LEAN_BOC_MAGIC_PREFIX_CRC = "ACC3A728".hexToBytesUnsafe()
@@ -100,7 +100,7 @@ open class Serializer {
         public var pointer: CellPointer
         public var remainder: Data
         
-        public init(pointer: Serializer.CellPointer, remainder: Data) {
+        public init(pointer: Boc.CellPointer, remainder: Data) {
             self.pointer = pointer
             self.remainder = remainder
         }
