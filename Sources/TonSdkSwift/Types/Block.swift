@@ -104,8 +104,8 @@ public struct StateInit: BlockStruct {
     public let data: StateInitOptions
     private var _cell: Cell
     
-    public init(stateInitOptions: StateInitOptions) throws {
-        self.data = stateInitOptions
+    public init(options: StateInitOptions) throws {
+        self.data = options
         
         let builder = CellBuilder()
         
@@ -161,7 +161,7 @@ public struct StateInit: BlockStruct {
             )
         )
         
-        return try StateInit(stateInitOptions: options)
+        return try StateInit(options: options)
     }
 }
 
@@ -297,12 +297,12 @@ public enum CommonMsgInfo: BlockStruct {
 
 public struct MessageOptions {
     public var info: CommonMsgInfo
-    public var initOptions: StateInit?
+    public var stateInit: StateInit?
     public var body: Cell?
     
-    public init(info: CommonMsgInfo, initOptions: StateInit? = nil, body: Cell? = nil) {
+    public init(info: CommonMsgInfo, stateInit: StateInit? = nil, body: Cell? = nil) {
         self.info = info
-        self.initOptions = initOptions
+        self.stateInit = stateInit
         self.body = body
     }
 }
@@ -318,7 +318,7 @@ public struct Message: BlockStruct {
         try b.storeSlice(self.data.info.cell().parse())
         
         // init:(Maybe (Either StateInit ^StateInit))
-        if let initOptions = self.data.initOptions {
+        if let initOptions = self.data.stateInit {
             try b.storeBits([.b1, .b0])
             try b.storeSlice(initOptions.cell().parse())
         } else {
@@ -351,7 +351,7 @@ public struct Message: BlockStruct {
         
         if try cs.loadBit() == .b1 {
             let initSlice = try cs.loadBit() == .b1 ? cs.loadRef().parse() : cs
-            data.initOptions = try StateInit.parse(cs: initSlice)
+            data.stateInit = try StateInit.parse(cs: initSlice)
         }
         
         if try cs.loadBit() == .b1 {
