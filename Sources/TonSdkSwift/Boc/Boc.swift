@@ -268,7 +268,7 @@ open class Boc {
     
     
     public class func deserializeCell(remainder: Data, refIndexSize: Int) throws -> CellData {
-        guard remainder.count >= 2 else {
+        if remainder.count < 2 {
             throw ErrorTonSdkSwift("Not enough bytes to encode cell descriptors")
         }
 
@@ -289,10 +289,6 @@ open class Boc {
             throw ErrorTonSdkSwift("Cell can't have more than 4 refs \(totalRefs)")
         }
 
-        guard mutableRemainder.count >= 1 else {
-            throw ErrorTonSdkSwift("Not enough bytes to encode cell data")
-        }
-
         let bitsDescriptor = mutableRemainder.removeFirst()
 
         let isAugmented: Bool = (bitsDescriptor & 1) != 0
@@ -300,7 +296,9 @@ open class Boc {
         let hashesSize: Int = Int(hasHashes ? (level + 1) * 32 : 0)
         let depthSize: Int = Int(hasHashes ? (level + 1) * 2 : 0)
         
-        guard mutableRemainder.count >= hashesSize + depthSize + dataSize + refIndexSize * Int(totalRefs) else {
+        let requiredBytes = hashesSize + depthSize + dataSize + refIndexSize * Int(totalRefs)
+        
+        if  mutableRemainder.count < requiredBytes {
             throw ErrorTonSdkSwift("Not enough bytes to encode cell data")
         }
 
@@ -313,6 +311,7 @@ open class Boc {
         } else {
             mutableRemainder[mutableRemainder.startIndex..<mutableRemainder.startIndex + dataSize].toBits()
         }
+        mutableRemainder.removeFirst(dataSize)
 
         if isExotic && bits.count < 8 {
             throw ErrorTonSdkSwift("Not enough bytes for an exotic cell type")
@@ -352,7 +351,7 @@ open class Boc {
         let sizeBytes = header.sizeBytes
         let cellsData = header.cellsData
         let rootList = header.rootList
-
+        
         var remainder: Data = cellsData
         for _ in 0..<cellsNum {
             let deserialized = try deserializeCell(remainder: remainder, refIndexSize: sizeBytes)
@@ -365,7 +364,6 @@ open class Boc {
             let pointerIndex = pointers.count - index - 1
             let cellBuilder = pointers[pointerIndex].builder
             let cellType = pointers[pointerIndex].type
-//            print(index)
 
             for refIndex in pointers[pointerIndex].refs {
                 let refBuilder = pointers[Int(refIndex)].builder
