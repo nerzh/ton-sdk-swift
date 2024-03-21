@@ -24,7 +24,10 @@ public struct HashmapOptions<K, V> {
     }
 }
 
-typealias HashmapNode = (key: [Bit], value: Cell)
+struct HashmapNode {
+    var key: [Bit]
+    var value: Cell
+}
 
 public struct LazyDeserialize<Element> {
     private let closure: () throws -> Element
@@ -162,8 +165,8 @@ open class Hashmap<K, V> {
                 sorted.append((order: order, key: key, value: value))
             }
         }
-
-        return sorted.map { (key: $0.key, value: $0.value) }
+        
+        return sorted.map { .init(key: $0.key, value: $0.value) }
     }
     
     fileprivate func serialize() throws -> Cell {
@@ -195,7 +198,9 @@ open class Hashmap<K, V> {
         // hmn_fork#_
         if nodes.count > 1 {
             // Left edge can be empty, anyway we need to create hme_empty$0 to support right one
-            var (leftNodes, rightNodes) = serializeFork(nodes: nodes)
+            
+            var (leftNodes, rightNodes) = serializeFork(nodes: &nodes)
+            
             let leftEdge = try serializeEdge(&leftNodes)
             try edge.storeRef(leftEdge)
 
@@ -235,7 +240,7 @@ open class Hashmap<K, V> {
         }
         let sameBitsLength = sameBitsIndex ?? first.count
         
-        if first[0] != last[0] || m == 0 {
+        if m == 0 || first[0] != last[0] {
             // hml_short for zero most possible bits
             return try serializeLabelShort([])
         }
@@ -308,20 +313,17 @@ open class Hashmap<K, V> {
         return label.bits
     }
     
-    fileprivate static func serializeFork(nodes: [HashmapNode]) -> ([HashmapNode], [HashmapNode]) {
+    fileprivate static func serializeFork(nodes: inout [HashmapNode]) -> ([HashmapNode], [HashmapNode]) {
         var leftNodes = [HashmapNode]()
         var rightNodes = [HashmapNode]()
 
-        for node in nodes {
-            var key = node.key
-            let value = node.value
-
-            if !key.isEmpty {
-                let firstBit = key.removeFirst()
+        for (index, _) in nodes.enumerated() {
+            if !nodes[index].key.isEmpty {
+                let firstBit = nodes[index].key.removeFirst()
                 if firstBit == .b0 {
-                    leftNodes.append((key, value))
+                    leftNodes.append(.init(key: nodes[index].key, value: nodes[index].value))
                 } else {
-                    rightNodes.append((key, value))
+                    rightNodes.append(.init(key: nodes[index].key, value: nodes[index].value))
                 }
             }
         }
@@ -363,7 +365,7 @@ open class Hashmap<K, V> {
 
         if currentKey.count == keySize {
             let value = try CellBuilder().storeSlice(edge).cell()
-            return nodes + [(currentKey, value)]
+            return nodes + [.init(key: currentKey, value: value)]
         }
 
         for i in 0..<edge.refs.count {
