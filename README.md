@@ -13,7 +13,7 @@ Swift SDK for interaction with TON (The Open Network) blockchain
 
 Install ton-sdk-swift:
 
-- `.package(url: "https://github.com/nerzh/ton-sdk-swift", .upToNextMajor(from: "0.0.1")),`
+- `.package(url: "https://github.com/nerzh/ton-sdk-swift", .upToNextMajor(from: "1.0.0")),`
 
 ###### ⚠️ You might also find it beneficial to make use of the [ton-sdk-swift-smc](https://github.com/nerzh/ton-sdk-swift-smc) package, which implements basic wrappers for TON smart contracts (please be aware that ton-sdk-ruby-smc is distributed under the LGPL-3.0 license).
 
