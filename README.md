@@ -13,7 +13,7 @@ Swift SDK for interaction with TON (The Open Network) blockchain
 
 Install ton-sdk-swift:
 
-- `.package(url: "https://github.com/nerzh/ton-sdk-swift", .upToNextMajor(from: "0.0.1")),`
+- `.package(url: "https://github.com/nerzh/ton-sdk-swift", .upToNextMajor(from: "1.0.0")),`
 
 ###### ⚠️ You might also find it beneficial to make use of the [ton-sdk-swift-smc](https://github.com/nerzh/ton-sdk-swift-smc) package, which implements basic wrappers for TON smart contracts (please be aware that ton-sdk-ruby-smc is distributed under the LGPL-3.0 license).
 
@@ -35,13 +35,13 @@ final class ExampleTests: XCTestCase {
         try b.storeCoins(Coins(0.0001))
         
         /// End builder and serialize to boc
-        let bytes = try Serializer.serialize(root: [b.cell()])
+        let bytes = try Boc.serialize(root: [b.cell()])
         let base64 = bytes.toBase64()
         
         print("boc in base64 format:", base64)
         
         /// Deserialize base64 boc
-        let cell = try Serializer.deserialize(data: base64.base64ToBytes()).first
+        let cell = try Boc.deserialize(data: base64.base64ToBytes()).first
         
         /// Parse cell into slice
         let cs = cell?.parse()
