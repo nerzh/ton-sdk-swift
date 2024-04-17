@@ -212,7 +212,7 @@ public enum CommonMsgInfo: BlockStruct {
         public var createdAt: UInt32
         
         public init(
-            ihrDisabled: Bool = false,
+            ihrDisabled: Bool = true,
             bounce: Bool,
             bounced: Bool = false,
             src: Address? = nil,
