@@ -11,7 +11,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/nerzh/swift-extensions-pack", .upToNextMajor(from: "1.19.1")),
     .package(url: "https://github.com/apple/swift-crypto", "1.0.0" ..< "3.0.0"),
     .package(url: "https://github.com/bytehubio/CryptoSwift", .upToNextMajor(from: "1.8.1")),
-    .package(url: "https://github.com/nerzh/swift-net-layer", .upToNextMajor(from: "1.3.2")),
+    .package(url: "https://github.com/nerzh/swift-net-layer", .upToNextMajor(from: "1.5.0")),
 ]
 
 var mainTarget: [Target.Dependency] = [

@@ -11,18 +11,18 @@ import SwiftExtensionsPack
 
 open class ToncenterApi: SNLResource {
     
-    public init(apiKey: String, requestPerSecond: UInt = 5, domain: String = "toncenter.com/api/v2", `protocol`: SNLProtocolType) {
+    public init(apiKey: String, domain: String = "toncenter.com/api/v2", `protocol`: SNLProtocolType, requestLimit: UInt = 5, timeRangeLimitSecond: UInt = 1) {
         super.init(protocol: `protocol`,
                    domain: domain,
                    defaultHeaders: [
                         "Content-Type": "application/json",
                         "X-API-Key": apiKey
                    ],
-                   requestPerSecondOptions: .init(.init(requestPerSecond: requestPerSecond))
+                   requestPerSecondOptions: .init(.init(requestLimit: requestLimit, timeRangeLimitSecond: timeRangeLimitSecond))
         )
     }
     
-    public init(url: String, apiKey: String = "", requestPerSecond: UInt = 5) throws {
+    public init(url: String, apiKey: String = "", requestLimit: UInt = 5, timeRangeLimitSecond: UInt = 1) throws {
         let url = url.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let stringProtocol = url.regexp(#"^(http.)"#)[1] else {
             throw ErrorTonSdkSwift("URL should have protocol http or https")
@@ -38,7 +38,7 @@ open class ToncenterApi: SNLResource {
                         "Content-Type": "application/json",
                         "X-API-Key": apiKey
                    ],
-                   requestPerSecondOptions: .init(.init(requestPerSecond: requestPerSecond))
+                   requestPerSecondOptions: .init(.init(requestLimit: requestLimit, timeRangeLimitSecond: timeRangeLimitSecond))
         )
     }
 }
