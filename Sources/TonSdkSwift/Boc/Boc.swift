@@ -455,46 +455,48 @@ open class Boc {
 
 
     public class func breadthFirstSort(root: [Cell]) throws -> (cells: [Cell], hashmap: [String: Int]) {
-        var queue = root
-        var cells: [(cell: Cell, hash: String)] = try root.map { ($0, try $0.hash()) }
+        var stack = root
+        var cells: [(cell: Cell, hash: String, deleted: Bool)] = try root.map { ($0, try $0.hash(), false) }
         var hashIndexes: [String: Int] = Dictionary(uniqueKeysWithValues: cells.enumerated().map { ($1.hash, $0) })
-
-        // Process tree node to ordered cells list
-        func process(node: Cell) throws {
-            let hash = try node.hash()
-
-            if let index = hashIndexes[hash] {
-                cells.append(cells.remove(at: index))
-            } else {
-                cells.append((cell: node, hash: hash))
-            }
-
-            queue.append(node)
-            hashIndexes[hash] = cells.count - 1
-        }
-
-        // Loop through multi-tree and make breadth-first search till last node
-        while !queue.isEmpty {
-            let count = queue.count
-
-            for _ in 0..<count {
-                let node = queue.removeFirst()
+        
+        while !stack.isEmpty {
+            let count = stack.count
+            
+            var idx = 0
+            while idx < count {
+                let node = stack[idx]
                 try node.refs.forEach { ref in
-                    try process(node: ref)
+                    let hash = try ref.hash()
+                    if let index = hashIndexes[hash] {
+                        let val = cells[index]
+                        cells[index] = (cells[index].cell, cells[index].hash, true)
+                        cells.append(val)
+                    } else {
+                        cells.append((cell: ref, hash: hash, deleted: false))
+                    }
+                    
+                    stack.append(ref)
+                    hashIndexes[hash] = cells.count - 1
                 }
+                idx += 1
             }
+            
+            stack.shift(count)
         }
 
         var hashmap: [String: Int] = [:]
-        for (i, (_, hash)) in cells.enumerated() {
-            hashmap[hash] = i
+        var resultCells: [Cell] = []
+        var order: Int = 0
+        for (index, (cell, hash, deleted)) in cells.enumerated() {
+            if !deleted {
+                hashmap[hash] = order
+                resultCells.append(cell)
+                order += 1
+            }
         }
-
-        let resultCells = cells.map { $0.cell }
 
         return (resultCells, hashmap)
     }
-    
     
     public class func serializeCell(cell: Cell, hashmap: [String: Int], refIndexSize: Int) throws -> [Bit] {
         let representation = cell.getRefsDescriptor() + cell.getBitsDescriptor() + cell.getAugmentedBits()

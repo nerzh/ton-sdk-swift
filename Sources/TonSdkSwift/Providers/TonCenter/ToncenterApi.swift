@@ -24,7 +24,7 @@ open class ToncenterApi: SNLResource {
     
     public init(url: String, apiKey: String = "", requestPerSecond: UInt = 5) throws {
         let url = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let stringProtocol = url.regexp(#"^(http\w)"#)[1] else {
+        guard let stringProtocol = url.regexp(#"^(http.)"#)[1] else {
             throw ErrorTonSdkSwift("URL should have protocol http or https")
         }
         guard let domain = url.regexp(#"\:\/\/([\s\S]+)$"#)[1] else {
