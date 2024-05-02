@@ -136,11 +136,11 @@ public struct Coins {
         return floatString
     }
     
-    mutating func updateDecimals(to: Int) {
-        self = decimals(to: to)
+    public mutating func updateDecimals(to: Int) {
+        self = toDecimals(to)
     }
     
-    func decimals(to: Int) -> Self {
+    public func toDecimals(_ to: Int) -> Self {
         var nanoValue: BigInt
         if decimals > to {
             nanoValue = self.nanoValue / BigInt(10**(decimals - Int(to)))
@@ -205,33 +205,33 @@ extension Coins: Equatable, Comparable, Hashable {
     
     public static func + (lhs: Coins, rhs: Coins) -> Coins {
         if lhs.decimals > rhs.decimals {
-            return .init(nanoValue: lhs.nanoValue + rhs.decimals(to: lhs.decimals).nanoValue, decimals: lhs.decimals)
+            return .init(nanoValue: lhs.nanoValue + rhs.toDecimals(lhs.decimals).nanoValue, decimals: lhs.decimals)
         } else {
-            return .init(nanoValue: lhs.decimals(to: rhs.decimals).nanoValue + rhs.nanoValue, decimals: rhs.decimals)
+            return .init(nanoValue: lhs.toDecimals(rhs.decimals).nanoValue + rhs.nanoValue, decimals: rhs.decimals)
         }
     }
     
     public static func - (lhs: Coins, rhs: Coins) -> Coins {
         if lhs.decimals > rhs.decimals {
-            return .init(nanoValue: lhs.nanoValue - rhs.decimals(to: lhs.decimals).nanoValue, decimals: lhs.decimals)
+            return .init(nanoValue: lhs.nanoValue - rhs.toDecimals(lhs.decimals).nanoValue, decimals: lhs.decimals)
         } else {
-            return .init(nanoValue: lhs.decimals(to: rhs.decimals).nanoValue - rhs.nanoValue, decimals: rhs.decimals)
+            return .init(nanoValue: lhs.toDecimals(rhs.decimals).nanoValue - rhs.nanoValue, decimals: rhs.decimals)
         }
     }
     
     public static func / (lhs: Coins, rhs: Coins) -> Coins {
         if lhs.decimals > rhs.decimals {
-            return .init(coinsValue: lhs.nanoValue / rhs.decimals(to: lhs.decimals).nanoValue, decimals: lhs.decimals)
+            return .init(coinsValue: lhs.nanoValue / rhs.toDecimals(lhs.decimals).nanoValue, decimals: lhs.decimals)
         } else {
-            return .init(coinsValue: lhs.decimals(to: rhs.decimals).nanoValue / rhs.nanoValue, decimals: rhs.decimals)
+            return .init(coinsValue: lhs.toDecimals(rhs.decimals).nanoValue / rhs.nanoValue, decimals: rhs.decimals)
         }
     }
     
     public static func % (lhs: Coins, rhs: Coins) -> Coins {
         if lhs.decimals > rhs.decimals {
-            return .init(nanoValue: lhs.nanoValue % rhs.decimals(to: lhs.decimals).nanoValue, decimals: lhs.decimals)
+            return .init(nanoValue: lhs.nanoValue % rhs.toDecimals(lhs.decimals).nanoValue, decimals: lhs.decimals)
         } else {
-            return .init(nanoValue: lhs.decimals(to: rhs.decimals).nanoValue % rhs.nanoValue, decimals: rhs.decimals)
+            return .init(nanoValue: lhs.toDecimals(rhs.decimals).nanoValue % rhs.nanoValue, decimals: rhs.decimals)
         }
     }
 }
