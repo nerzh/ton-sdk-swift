@@ -14,7 +14,8 @@ public struct Coins {
     
     private static let DEFAULT_DECIMALS: Int = 9
     private var _nanoValue: BigInt
-    public let decimals: Int
+    private var _decimals: Int
+    public var decimals: Int { _decimals }
     public var nanoValue: BigInt { _nanoValue }
     public var coinsValue: Double {
         Double(toFloatString)!
@@ -82,12 +83,12 @@ public struct Coins {
     
     public init(nanoValue: any SignedInteger, decimals: Int) {
         self._nanoValue = .init(nanoValue)
-        self.decimals = decimals
+        self._decimals = decimals
     }
     
     public init(nanoValue: any UnsignedInteger, decimals: Int) {
         self._nanoValue = .init(nanoValue)
-        self.decimals = decimals
+        self._decimals = decimals
     }
     
     public init(nanoValue: String, decimals: Int) throws {
@@ -95,12 +96,12 @@ public struct Coins {
             throw ErrorTonSdkSwift("Convert string \(nanoValue) to BigInt failed")
         }
         self._nanoValue = nanoTokens
-        self.decimals = decimals
+        self._decimals = decimals
     }
     
     public init(nanoValue: any BinaryFloatingPoint, decimals: Int) {
         self._nanoValue = .init(nanoValue)
-        self.decimals = decimals
+        self._decimals = decimals
     }
     
     
@@ -133,6 +134,20 @@ public struct Coins {
             floatString = floatString.replace(#"(\.+|0+|\.0+)$"#, "")
         }
         return floatString
+    }
+    
+    mutating func updateDecimals(to: Int) {
+        self = decimals(to: to)
+    }
+    
+    func decimals(to: Int) -> Self {
+        var nanoValue: BigInt
+        if decimals > to {
+            nanoValue = self.nanoValue / BigInt(10**(decimals - Int(to)))
+        } else {
+            nanoValue = self.nanoValue * BigInt(10**(abs(decimals - Int(to))))
+        }
+        return .init(nanoValue: nanoValue, decimals: to)
     }
 }
 
@@ -181,23 +196,43 @@ extension Coins: Equatable, Comparable, Hashable {
     }
     
     public static func * (lhs: Coins, rhs: Coins) -> Coins {
-        .init(nanoValue: lhs.nanoValue * rhs.nanoValue, decimals: lhs.decimals)
+        if lhs.decimals > rhs.decimals {
+            return .init(nanoValue: (lhs.nanoValue * rhs.nanoValue) / BigInt(10**(rhs.decimals)), decimals: lhs.decimals)
+        } else {
+            return .init(nanoValue: (lhs.nanoValue * rhs.nanoValue) / BigInt(10**(lhs.decimals)), decimals: rhs.decimals)
+        }
     }
     
     public static func + (lhs: Coins, rhs: Coins) -> Coins {
-        .init(nanoValue: lhs.nanoValue + rhs.nanoValue, decimals: lhs.decimals)
+        if lhs.decimals > rhs.decimals {
+            return .init(nanoValue: lhs.nanoValue + rhs.decimals(to: lhs.decimals).nanoValue, decimals: lhs.decimals)
+        } else {
+            return .init(nanoValue: lhs.decimals(to: rhs.decimals).nanoValue + rhs.nanoValue, decimals: rhs.decimals)
+        }
     }
     
     public static func - (lhs: Coins, rhs: Coins) -> Coins {
-       .init(nanoValue: lhs.nanoValue - rhs.nanoValue, decimals: lhs.decimals)
+        if lhs.decimals > rhs.decimals {
+            return .init(nanoValue: lhs.nanoValue - rhs.decimals(to: lhs.decimals).nanoValue, decimals: lhs.decimals)
+        } else {
+            return .init(nanoValue: lhs.decimals(to: rhs.decimals).nanoValue - rhs.nanoValue, decimals: rhs.decimals)
+        }
     }
     
     public static func / (lhs: Coins, rhs: Coins) -> Coins {
-        .init(nanoValue: lhs.nanoValue / rhs.nanoValue, decimals: lhs.decimals)
+        if lhs.decimals > rhs.decimals {
+            return .init(coinsValue: lhs.nanoValue / rhs.decimals(to: lhs.decimals).nanoValue, decimals: lhs.decimals)
+        } else {
+            return .init(coinsValue: lhs.decimals(to: rhs.decimals).nanoValue / rhs.nanoValue, decimals: rhs.decimals)
+        }
     }
     
     public static func % (lhs: Coins, rhs: Coins) -> Coins {
-        .init(nanoValue: lhs.nanoValue % rhs.nanoValue, decimals: lhs.decimals)
+        if lhs.decimals > rhs.decimals {
+            return .init(nanoValue: lhs.nanoValue % rhs.decimals(to: lhs.decimals).nanoValue, decimals: lhs.decimals)
+        } else {
+            return .init(nanoValue: lhs.decimals(to: rhs.decimals).nanoValue % rhs.nanoValue, decimals: rhs.decimals)
+        }
     }
 }
 

@@ -51,5 +51,30 @@ final class CoinsTests: XCTestCase {
         XCTAssertEqual(coins.nanoValue, 50_000_000_000)
         XCTAssertEqual(coins.coinsValue, 50_000_000_000)
         XCTAssertEqual(coins.toFloatString, "50000000000")
+        
+        coins = Coins(coinsValue: 2, decimals: 5) * Coins(coinsValue: 2, decimals: 10)
+        XCTAssertEqual(coins.nanoValue, 4_0000000000)
+        XCTAssertEqual(coins.coinsValue, 4)
+        XCTAssertEqual(coins.toFloatString, "4")
+        
+        coins = Coins(coinsValue: 2, decimals: 10) * Coins(coinsValue: 2, decimals: 5)
+        XCTAssertEqual(coins.nanoValue, 4_0000000000)
+        XCTAssertEqual(coins.coinsValue, 4)
+        XCTAssertEqual(coins.toFloatString, "4")
+        
+        coins = Coins(coinsValue: 2, decimals: 10) + Coins(coinsValue: 2, decimals: 5)
+        XCTAssertEqual(coins.nanoValue, 4_0000000000)
+        XCTAssertEqual(coins.coinsValue, 4)
+        XCTAssertEqual(coins.toFloatString, "4")
+        
+        coins = Coins(coinsValue: 6, decimals: 5) / Coins(coinsValue: 2, decimals: 10)
+        XCTAssertEqual(coins.nanoValue, 3_0000000000)
+        XCTAssertEqual(coins.coinsValue, 3)
+        XCTAssertEqual(coins.toFloatString, "3")
+        
+        coins = Coins(coinsValue: 71, decimals: 10) % Coins(coinsValue: 3, decimals: 5)
+        XCTAssertEqual(coins.nanoValue, 2_0000000000)
+        XCTAssertEqual(coins.coinsValue, 2)
+        XCTAssertEqual(coins.toFloatString, "2")
     }
 }
