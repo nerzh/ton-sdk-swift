@@ -76,5 +76,10 @@ final class CoinsTests: XCTestCase {
         XCTAssertEqual(coins.nanoValue, 2_0000000000)
         XCTAssertEqual(coins.coinsValue, 2)
         XCTAssertEqual(coins.toFloatString, "2")
+        
+        /// <>==
+        XCTAssertTrue(Coins(coinsValue: 2, decimals: 10) == Coins(coinsValue: 2, decimals: 2))
+        XCTAssertTrue(Coins(coinsValue: 1, decimals: 10) < Coins(coinsValue: 2, decimals: 2))
+        XCTAssertTrue(Coins(coinsValue: 3, decimals: 1) >= Coins(coinsValue: 1, decimals: 15))
     }
 }

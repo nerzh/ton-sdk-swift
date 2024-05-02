@@ -155,45 +155,63 @@ public struct Coins {
 
 extension Coins: Equatable, Comparable, Hashable {
     
+    public static func == (lhs: Coins, rhs: Coins) -> Bool {
+        if lhs.decimals > rhs.decimals {
+            return lhs.nanoValue == rhs.toDecimals(lhs.decimals).nanoValue
+        } else {
+            return lhs.toDecimals(rhs.decimals).nanoValue == rhs.nanoValue
+        }
+    }
+    
     public static func < (lhs: Coins, rhs: Coins) -> Bool {
-        lhs._nanoValue < rhs._nanoValue
+        if lhs.decimals > rhs.decimals {
+            return lhs.nanoValue < rhs.toDecimals(lhs.decimals).nanoValue
+        } else {
+            return lhs.toDecimals(rhs.decimals).nanoValue < rhs.nanoValue
+        }
     }
     
-    public static func <<= <RHS>(lhs: inout Coins, rhs: RHS) where RHS : BinaryInteger {
-        lhs._nanoValue <<= rhs
-    }
-    
-    public static func >>= <RHS>(lhs: inout Coins, rhs: RHS) where RHS : BinaryInteger {
-        lhs._nanoValue >>= rhs
-    }
+//    public static func <<= <RHS>(lhs: inout Coins, rhs: RHS) where RHS : BinaryInteger {
+//        lhs._nanoValue <<= rhs
+//    }
+//    
+//    public static func >>= <RHS>(lhs: inout Coins, rhs: RHS) where RHS : BinaryInteger {
+//        lhs._nanoValue >>= rhs
+//    }
     
     public static func /= (lhs: inout Coins, rhs: Coins) {
-        lhs._nanoValue /= rhs.nanoValue
+        let result = lhs / rhs
+        lhs._nanoValue = result.nanoValue
+        lhs._decimals = result.decimals
     }
     
     public static func *= (lhs: inout Coins, rhs: Coins) {
-        lhs._nanoValue *= rhs.nanoValue
+        let result = lhs * rhs
+        lhs._nanoValue = result.nanoValue
+        lhs._decimals = result.decimals
     }
     
     public static func %= (lhs: inout Coins, rhs: Coins) {
-        lhs._nanoValue %= rhs.nanoValue
+        let result = lhs % rhs
+        lhs._nanoValue = result.nanoValue
+        lhs._decimals = result.decimals
     }
     
-    public static func &= (lhs: inout Coins, rhs: Coins) {
-        lhs._nanoValue &= rhs.nanoValue
-    }
-    
-    public static func |= (lhs: inout Coins, rhs: Coins) {
-        lhs._nanoValue |= rhs.nanoValue
-    }
-    
-    public static func ^= (lhs: inout Coins, rhs: Coins) {
-        lhs._nanoValue ^= rhs.nanoValue
-    }
-    
-    prefix public static func ~ (x: Coins) -> Coins {
-        .init(nanoValue: ~x.nanoValue, decimals: x.decimals)
-    }
+//    public static func &= (lhs: inout Coins, rhs: Coins) {
+//        lhs._nanoValue &= rhs.nanoValue
+//    }
+//    
+//    public static func |= (lhs: inout Coins, rhs: Coins) {
+//        lhs._nanoValue |= rhs.nanoValue
+//    }
+//    
+//    public static func ^= (lhs: inout Coins, rhs: Coins) {
+//        lhs._nanoValue ^= rhs.nanoValue
+//    }
+//    
+//    prefix public static func ~ (x: Coins) -> Coins {
+//        .init(nanoValue: ~x.nanoValue, decimals: x.decimals)
+//    }
     
     public static func * (lhs: Coins, rhs: Coins) -> Coins {
         if lhs.decimals > rhs.decimals {
