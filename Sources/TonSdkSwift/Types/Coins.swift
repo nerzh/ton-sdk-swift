@@ -171,13 +171,17 @@ extension Coins: Equatable, Comparable, Hashable {
         }
     }
     
-//    public static func <<= <RHS>(lhs: inout Coins, rhs: RHS) where RHS : BinaryInteger {
-//        lhs._nanoValue <<= rhs
-//    }
-//    
-//    public static func >>= <RHS>(lhs: inout Coins, rhs: RHS) where RHS : BinaryInteger {
-//        lhs._nanoValue >>= rhs
-//    }
+    public static func += (lhs: inout Coins, rhs: Coins) {
+        let result = lhs + rhs
+        lhs._nanoValue = result.nanoValue
+        lhs._decimals = result.decimals
+    }
+    
+    public static func -= (lhs: inout Coins, rhs: Coins) {
+        let result = lhs - rhs
+        lhs._nanoValue = result.nanoValue
+        lhs._decimals = result.decimals
+    }
     
     public static func /= (lhs: inout Coins, rhs: Coins) {
         let result = lhs / rhs
@@ -197,6 +201,7 @@ extension Coins: Equatable, Comparable, Hashable {
         lhs._decimals = result.decimals
     }
     
+#warning("Add additional operators")
 //    public static func &= (lhs: inout Coins, rhs: Coins) {
 //        lhs._nanoValue &= rhs.nanoValue
 //    }
@@ -212,7 +217,15 @@ extension Coins: Equatable, Comparable, Hashable {
 //    prefix public static func ~ (x: Coins) -> Coins {
 //        .init(nanoValue: ~x.nanoValue, decimals: x.decimals)
 //    }
-    
+//
+//    public static func <<= <RHS>(lhs: inout Coins, rhs: RHS) where RHS : BinaryInteger {
+//        lhs._nanoValue <<= rhs
+//    }
+//
+//    public static func >>= <RHS>(lhs: inout Coins, rhs: RHS) where RHS : BinaryInteger {
+//        lhs._nanoValue >>= rhs
+//    }
+
     public static func * (lhs: Coins, rhs: Coins) -> Coins {
         if lhs.decimals > rhs.decimals {
             return .init(nanoValue: (lhs.nanoValue * rhs.nanoValue) / BigInt(10**(rhs.decimals)), decimals: lhs.decimals)
