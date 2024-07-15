@@ -25,7 +25,7 @@ open class CellSlice: Equatable {
     @discardableResult
     public func skipBits(size: Int) throws -> Self {
         if bits.count < size {
-            throw ErrorTonSdkSwift("Slice: bits overflow.")
+            throw ErrorTonSdkSwift("Slice: bits underflow.")
         }
         
         bits.removeFirst(size)
@@ -34,7 +34,7 @@ open class CellSlice: Equatable {
     
     public func skipRefs(size: Int) throws -> Self {
         if refs.count < size {
-            throw ErrorTonSdkSwift("Slice: refs overflow.")
+            throw ErrorTonSdkSwift("Slice: refs underflow.")
         }
         
         refs.removeFirst(size)
@@ -53,7 +53,7 @@ open class CellSlice: Equatable {
     
     public func loadRef() throws -> Cell {
         if refs.isEmpty {
-            throw ErrorTonSdkSwift("Slice: refs overflow.")
+            throw ErrorTonSdkSwift("Slice: refs underflow.")
         }
         
         return refs.removeFirst()
@@ -61,7 +61,7 @@ open class CellSlice: Equatable {
     
     public func preloadRef() throws -> Cell {
         if refs.isEmpty {
-            throw ErrorTonSdkSwift("Slice: refs overflow.")
+            throw ErrorTonSdkSwift("Slice: refs underflow.")
         }
         
         return refs[0]
@@ -77,7 +77,7 @@ open class CellSlice: Equatable {
     
     public func loadBit() throws -> Bit {
         if bits.isEmpty {
-            throw ErrorTonSdkSwift("Slice: bits overflow.")
+            throw ErrorTonSdkSwift("Slice: bits underflow.")
         }
         
         return bits.removeFirst()
@@ -85,7 +85,7 @@ open class CellSlice: Equatable {
     
     public func preloadBit() throws -> Bit {
         if bits.isEmpty {
-            throw ErrorTonSdkSwift("Slice: bits overflow.")
+            throw ErrorTonSdkSwift("Slice: bits underflow.")
         }
         
         return bits[0]
@@ -93,7 +93,7 @@ open class CellSlice: Equatable {
     
     public func loadBits(size: Int) throws -> [Bit] {
         if size < 0 || bits.count < size {
-            throw ErrorTonSdkSwift("Slice: bits overflow.")
+            throw ErrorTonSdkSwift("Slice: bits underflow.")
         }
         
         return bits.shift(size)
@@ -101,7 +101,7 @@ open class CellSlice: Equatable {
     
     public func preloadBits(size: Int) throws -> [Bit] {
         if size < 0 || bits.count < size {
-            throw ErrorTonSdkSwift("Slice: bits overflow.")
+            throw ErrorTonSdkSwift("Slice: bits underflow.")
         }
         var copyBits = bits
         return copyBits.shift(size)
@@ -300,6 +300,22 @@ open class CellSlice: Equatable {
         } else {
             return try HashmapE(keySize: keySize, options: options)
         }
+    }
+    
+    public func loadUnaryLength() throws -> Int {
+        var res: Int = 0
+        while try self.loadBit() == .b1 {
+            res += 1
+        }
+        return res
+    }
+    
+    public func preloadUnaryLength() throws -> Int {
+        var cursor: Int = 0
+        while self.bits[cursor] == .b1 {
+            cursor += 1
+        }
+        return cursor
     }
     
     public static func parse(cell: Cell) -> CellSlice {

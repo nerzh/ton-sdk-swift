@@ -84,11 +84,11 @@ open class Boc {
 
     public struct CellPointer {
         public var cell: Cell?
-        public var type: Cell.CellType
+        public var type: CellType
         public var builder: CellBuilder
         public var refs: [BigUInt]
         
-        public init(cell: Cell? = nil, type: Cell.CellType, builder: CellBuilder, refs: [BigUInt]) {
+        public init(cell: Cell? = nil, type: CellType, builder: CellBuilder, refs: [BigUInt]) {
             self.cell = cell
             self.type = type
             self.builder = builder
@@ -317,9 +317,9 @@ open class Boc {
             throw ErrorTonSdkSwift("Not enough bytes for an exotic cell type")
         }
 
-        let type: Cell.CellType!
+        let type: CellType!
         if isExotic {
-            guard let unwrapedType = Cell.CellType(rawValue: Int8([Bit](bits[0..<8]).toBigInt())) else {
+            guard let unwrapedType = CellType(rawValue: Int8([Bit](bits[0..<8]).toBigInt())) else {
                 throw ErrorTonSdkSwift("Unknown cell type")
             }
             type = unwrapedType
@@ -347,19 +347,18 @@ open class Boc {
         var hasMerkleProofs = false
         var pointers: [CellPointer] = []
         let header: BocHeader = try deserializeHeader(bytes: data)
-        let cellsNum = header.cellsNum
-        let sizeBytes = header.sizeBytes
-        let cellsData = header.cellsData
-        let rootList = header.rootList
+        let cellsNum: BigUInt = header.cellsNum
+        let sizeBytes: Int = header.sizeBytes
+        let cellsData: Data = header.cellsData
+        let rootList: [BigUInt] = header.rootList
         
         var remainder: Data = cellsData
         for _ in 0..<cellsNum {
-            let deserialized = try deserializeCell(remainder: remainder, refIndexSize: sizeBytes)
+            let deserialized: CellData = try deserializeCell(remainder: remainder, refIndexSize: sizeBytes)
             remainder = deserialized.remainder
             pointers.append(deserialized.pointer)
         }
         
-
         for index in 0..<pointers.count {
             let pointerIndex = pointers.count - index - 1
             let cellBuilder = pointers[pointerIndex].builder
@@ -376,14 +375,12 @@ open class Boc {
                 if refType == .merkleProof || refType == .merkleUpdate {
                     hasMerkleProofs = true
                 }
-
                 try cellBuilder.storeRef(refBuilder.cell(refType))
             }
 
             if cellType == .merkleProof || cellType == .merkleUpdate {
                 hasMerkleProofs = true
             }
-
             pointers[pointerIndex].cell = try cellBuilder.cell(cellType)
         }
 

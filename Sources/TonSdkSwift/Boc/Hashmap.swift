@@ -10,12 +10,21 @@ import BigInt
 
 public struct HashmapOptions<K, V> {
     public var keySize: Int?
+    #warning("prefixed - Not implemented yet")
+    @available(*, deprecated, message: "Not implemented yet")
     public var prefixed: Bool?
+    #warning("nonEmpty - Not implemented yet")
+    @available(*, deprecated, message: "Not implemented yet")
     public var nonEmpty: Bool?
     public var serializers: (key: (K) throws -> [Bit], value: (V) throws -> Cell)?
     public var deserializers: (key: ([Bit]) throws -> K, value: (Cell) throws -> V)?
     
-    public init(keySize: Int? = nil, prefixed: Bool? = nil, nonEmpty: Bool? = nil, serializers: (key: (K) throws -> [Bit], value: (V) throws -> Cell)? = nil, deserializers: (key: ([Bit]) throws -> K, value: (Cell) throws -> V)? = nil) {
+    public init(keySize: Int? = nil, 
+                prefixed: Bool? = nil,
+                nonEmpty: Bool? = nil,
+                serializers: (key: (K) throws -> [Bit], value: (V) throws -> Cell)? = nil,
+                deserializers: (key: ([Bit]) throws -> K, value: (Cell) throws -> V)? = nil
+    ) {
         self.keySize = keySize
         self.prefixed = prefixed
         self.nonEmpty = nonEmpty
@@ -42,6 +51,7 @@ public struct LazyDeserialize<Element> {
 }
 
 open class Hashmap<K, V> {
+    
     public var hashmap: [String: Cell]
     public var keySize: Int
     public var serializeKey: (K) throws -> [Bit]
@@ -59,6 +69,26 @@ open class Hashmap<K, V> {
         self.serializeValue = serializers.value
         self.deserializeKey = deserializers.key
         self.deserializeValue = deserializers.value
+    }
+    
+    private convenience init(
+        hashmap: [String : Cell],
+        keySize: Int,
+        serializeKey: @escaping (K) throws -> [Bit],
+        serializeValue: @escaping (V) throws -> Cell,
+        deserializeKey: @escaping ([Bit]) throws -> K,
+        deserializeValue: @escaping (Cell) throws -> V
+    ) throws {
+        try self.init(
+            keySize: keySize,
+            options: .init(keySize: keySize,
+                           prefixed: nil,
+                           nonEmpty: nil,
+                           serializers: (key: serializeKey, value: serializeValue),
+                           deserializers: (key: deserializeKey, value: deserializeValue)
+                          )
+        )
+        self.hashmap = hashmap
     }
     
     public func makeIterator() throws -> AnyIterator<(LazyDeserialize<K>, LazyDeserialize<V>)> {
@@ -167,6 +197,96 @@ open class Hashmap<K, V> {
         }
         
         return sorted.map { .init(key: $0.key, value: $0.value) }
+    }
+    
+    public func buildMerkleProof(keys: [K]) throws -> Cell {
+        var binaryKeys: [[Bit]] = .init()
+        for (index, key) in keys.enumerated() {
+            if try !self.has(key) {
+                throw ErrorTonSdkSwift(reason: "Trying to generate merkle proof for a missing key at position: \(index)")
+            }
+            let serializedKey: [Bit] = try serializeKey(key)
+            if serializedKey.count != keySize {
+                throw ErrorTonSdkSwift(reason: "\(#function) \(#line) Serialized size is not equal to keySize")
+            }
+            binaryKeys.append(try serializeKey(key))
+        }
+        let slice: CellSlice = try cell().parse()
+        
+        return try processMerkleProof(prefix: [], slice: slice, n: keySize, keyBits: binaryKeys).toMerkleProof()
+    }
+    
+    private func processMerkleProof(prefix: [Bit], slice: CellSlice, n: Int, keyBits: [[Bit]]) throws -> Cell {
+        /// Reading label
+        let originalCell: Cell = try CellBuilder().storeSlice(slice).cell()
+        if keyBits.count == 0 {
+            /// no keys to prove, prune the whole subdict
+            return try originalCell.toPrunedBranch()
+        }
+        
+        let lb0: Bit = try slice.loadBit()
+        var prefixLength: Int = 0
+        var pp: [Bit] = prefix
+        
+        if lb0 == .b0 {
+            /// Short label detected
+
+            /// Read
+            prefixLength = try slice.loadUnaryLength()
+
+            /// Read prefix
+            for _ in 0..<prefixLength {
+                try pp.append(slice.loadBit())
+            }
+        } else {
+            let lb1: Bit = try slice.loadBit()
+            
+            if lb1 == .b0 {
+                /// Long label detected
+                prefixLength = try Int(slice.loadBigUInt(size: Int(ceil(log2(Double(n + 1))))))
+                for _ in 0..<prefixLength {
+                    try pp.append(slice.loadBit())
+                }
+            } else {
+                /// Same label detected
+                let bit: Bit = try slice.loadBit()
+                prefixLength = try Int(slice.loadBigUInt(size: Int(ceil(log2(Double(n + 1))))))
+                for _ in 0..<prefixLength {
+                    pp.append(bit)
+                }
+            }
+        }
+        
+        if n - prefixLength != 0 {
+            let slice: CellSlice = originalCell.parse()
+            var left: Cell = try slice.loadRef()
+            var right: Cell = try slice.loadRef()
+            /// NOTE: Left and right branches are implicitly contain prefixes '0' and '1'
+            if (!left.isExotic) {
+                let leftKeys = keyBits.filter { pp + [.b0] == $0.prefix(pp.count + 1) }
+                left = try processMerkleProof(prefix: pp + [.b0], slice: left.parse(), n: n - prefixLength - 1, keyBits: leftKeys)
+            }
+            if (!right.isExotic) {
+                let rightKeys = keyBits.filter { pp + [.b1] == $0.prefix(pp.count + 1) }
+                right = try processMerkleProof(prefix: pp + [.b1], slice: right.parse(), n: n - prefixLength - 1, keyBits: rightKeys)
+            }
+            
+            return try CellBuilder()
+                .storeSlice(slice)
+                .storeRef(left)
+                .storeRef(right)
+                .cell()
+        }
+        
+        return originalCell
+    }
+    
+    public func buildMerkleUpdate(key: K, newValue: V) throws -> Cell {
+        let oldProof: Cell = try buildMerkleProof(keys: [key]).refs[0]
+        let dict = try self.copy()
+        try dict.set(key, newValue)
+        let newProof: Cell = try dict.buildMerkleProof(keys: [key]).refs[0]
+        return try Cell.toMerkleUpdate(c1: oldProof, c2: newProof)
     }
     
     fileprivate func serialize() throws -> Cell {
@@ -418,6 +538,17 @@ open class Hashmap<K, V> {
     public func cell() throws -> Cell {
         try serialize()
     }
+    
+    public func copy() throws -> Hashmap {
+        try .init(
+            hashmap: hashmap,
+            keySize: keySize,
+            serializeKey: serializeKey,
+            serializeValue: serializeValue,
+            deserializeKey: deserializeKey,
+            deserializeValue: deserializeValue
+        )
+    }
 
     public class func parse(
         keySize: Int,
@@ -431,6 +562,30 @@ open class Hashmap<K, V> {
 
 
 open class HashmapE<K, V>: Hashmap<K, V> {
+    
+    public override init(keySize: Int, options: HashmapOptions<K, V>? = nil) throws {
+        try super.init(keySize: keySize, options: options)
+    }
+    
+    private convenience init(
+        hashmap: [String : Cell],
+        keySize: Int,
+        serializeKey: @escaping (K) throws -> [Bit],
+        serializeValue: @escaping (V) throws -> Cell,
+        deserializeKey: @escaping ([Bit]) throws -> K,
+        deserializeValue: @escaping (Cell) throws -> V
+    ) throws {
+        try self.init(
+            keySize: keySize,
+            options: .init(keySize: keySize,
+                           prefixed: nil,
+                           nonEmpty: nil,
+                           serializers: (key: serializeKey, value: serializeValue),
+                           deserializers: (key: deserializeKey, value: deserializeValue)
+                          )
+        )
+        self.hashmap = hashmap
+    }
     
     public override func serialize() throws -> Cell {
         var nodes = try sortHashmap()
@@ -478,5 +633,16 @@ open class HashmapE<K, V>: Hashmap<K, V> {
         options: HashmapOptions<K, V>? = nil
     ) throws -> HashmapE<K, V> {
         try deserialize(keySize: keySize, slice: slice, options: options)
+    }
+    
+    public override func copy() throws -> HashmapE {
+        try .init(
+            hashmap: hashmap,
+            keySize: keySize,
+            serializeKey: serializeKey,
+            serializeValue: serializeValue,
+            deserializeKey: deserializeKey,
+            deserializeValue: deserializeValue
+        )
     }
 }

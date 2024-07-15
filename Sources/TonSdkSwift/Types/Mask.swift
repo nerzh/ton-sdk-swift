@@ -31,7 +31,7 @@ public struct Mask {
     public func isSignificant(level: UInt32) -> Bool {
         level == 0 || (value >> (level - 1)) % 2 != 0
     }
-
+    
     public func apply(level: UInt32) -> Mask {
         Mask(maskValue: value & ((1 << level) - 1))
     }

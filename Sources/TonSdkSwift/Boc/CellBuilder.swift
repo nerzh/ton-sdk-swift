@@ -231,8 +231,8 @@ open class CellBuilder {
         return data
     }
 
-    public func cell(_ type: Cell.CellType = .ordinary) throws -> Cell {
-        try Cell(bits: bits, refs: refs, type: type)
+    public func cell(_ type: CellType = .ordinary) throws -> Cell {
+        return try Cell(bits: bits, refs: refs, type: type)
     }
 
     private func checkBitsOverflow(_ size: Int) throws {
