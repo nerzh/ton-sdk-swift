@@ -98,6 +98,10 @@ public extension String {
         }
         return data
     }
+    
+    func base64BocToCells(checkMerkleProofs: Bool = false) throws -> [Cell] {
+        try Boc.deserialize(data: base64ToBytes(), checkMerkleProofs: checkMerkleProofs)
+    }
 }
 
 
@@ -133,5 +137,9 @@ public extension Data {
     
     func toBase64(options: Base64EncodingOptions = []) -> String {
         base64EncodedString(options: options)
+    }
+    
+    func bocToCells(checkMerkleProofs: Bool = false) throws -> [Cell] {
+        try Boc.deserialize(data: self, checkMerkleProofs: checkMerkleProofs)
     }
 }

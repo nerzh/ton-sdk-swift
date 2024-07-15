@@ -396,4 +396,8 @@ open class Cell: Equatable {
         let signature = SEPCrypto.Ed25519.sign(message: message, publicKey32byte: keys.public, secretKey64byte: keys.secret)
         return signature
     }
+    
+    public func toBoc(bocOptions: Boc.BOCOptions = .init()) throws -> Data {
+        try Boc.serialize(root: [self], options: bocOptions)
+    }
 }
