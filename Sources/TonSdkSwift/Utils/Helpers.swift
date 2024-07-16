@@ -102,6 +102,10 @@ public extension String {
     func base64BocToCells(checkMerkleProofs: Bool = false) throws -> [Cell] {
         try Boc.deserialize(data: base64ToBytes(), checkMerkleProofs: checkMerkleProofs)
     }
+    
+    func hexBocToCells(checkMerkleProofs: Bool = false) throws -> [Cell] {
+        try Boc.deserialize(data: hexToBytes(), checkMerkleProofs: checkMerkleProofs)
+    }
 }
 
 
