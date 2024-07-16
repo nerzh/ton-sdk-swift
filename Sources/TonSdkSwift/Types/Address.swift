@@ -140,7 +140,7 @@ public struct Address: Equatable {
         
         switch type {
         case .raw:
-            return "\(workchain):\(hash.toHex())"
+            return "\(workchain):\(hash.toHex())".lowercased()
         case .base64:
             let tag: UInt8 = Address.encodeTag(bounceable: bounceable, testOnly: testOnly)
             var address = Data([tag])
