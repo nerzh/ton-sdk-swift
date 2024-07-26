@@ -40,7 +40,7 @@ public struct Address: Equatable {
         } else if isRaw {
             try Address.parseRaw(address)
         } else {
-            throw ErrorTonSdkSwift("Address: can't parse address. Unknown type.")
+            throw ErrorTonSdkSwift("Address: can't parse address: \(address). Unknown type.")
         }
         
         self.workchain = workchain ?? result.workchain
