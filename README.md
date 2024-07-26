@@ -15,7 +15,7 @@ Install ton-sdk-swift:
 
 - `.package(url: "https://github.com/nerzh/ton-sdk-swift", .upToNextMajor(from: "1.0.0")),`
 
-# TON-SDK-SWIFT-SMC
+# ⚠️ TON-SDK-SWIFT-SMC
 ###### ⚠️ You might also find it beneficial to make use of the [TON-SDK-SWIFT-SMC](https://github.com/nerzh/ton-sdk-swift-smc) package, which implements basic wrappers for TON smart contracts (please be aware that ton-sdk-ruby-smc is distributed under the LGPL-3.0 license).
 
 # Example
