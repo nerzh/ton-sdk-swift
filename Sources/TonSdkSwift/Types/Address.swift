@@ -32,6 +32,7 @@ public struct Address: Equatable {
                 testOnly: Bool? = nil,
                 hash: Data? = nil
     ) throws {
+        let address = address.trimmingCharacters(in: .whitespacesAndNewlines)
         let isEncoded = Address.isEncoded(address)
         let isRaw = Address.isRaw(address)
         
