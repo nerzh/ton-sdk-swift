@@ -203,11 +203,11 @@ open class Hashmap<K, V> {
         var binaryKeys: [[Bit]] = .init()
         for (index, key) in keys.enumerated() {
             if try !self.has(key) {
-                throw ErrorTonSdkSwift(reason: "Trying to generate merkle proof for a missing key at position: \(index)")
+                throw ErrorTonSdkSwift("Trying to generate merkle proof for a missing key at position: \(index)")
             }
             let serializedKey: [Bit] = try serializeKey(key)
             if serializedKey.count != keySize {
-                throw ErrorTonSdkSwift(reason: "\(#function) \(#line) Serialized size is not equal to keySize")
+                throw ErrorTonSdkSwift("\(#function) \(#line) Serialized size is not equal to keySize")
             }
             binaryKeys.append(try serializeKey(key))
         }

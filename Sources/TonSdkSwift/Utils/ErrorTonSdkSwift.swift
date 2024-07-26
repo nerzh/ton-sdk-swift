@@ -9,7 +9,6 @@ import Foundation
 import SwiftExtensionsPack
 
 public struct ErrorTonSdkSwift: ErrorCommon, Encodable {
-    public var title: String = "\(Self.self)"
     public var reason: String = ""
     public init() {}
 }
