@@ -60,7 +60,7 @@ public extension String {
         hex = hex.replacingOccurrences(of: "\n", with: "")
         
         guard hex.count % 2 == 0 else {
-            throw ErrorTonSdkSwift("Length not ODD")
+            throw ErrorTonSdkSwift("Length not ODD for: \(hex)")
         }
         
         var bytes: [UInt8] = []
@@ -70,7 +70,7 @@ public extension String {
             if let byte = UInt8(hex[index..<nextIndex], radix: 16) {
                 bytes.append(byte)
             } else {
-                throw ErrorTonSdkSwift("Failed convert hex to UInt8 radix 16")
+                throw ErrorTonSdkSwift("Failed convert hex to UInt8 radix 16 for: \(self)")
             }
             index = nextIndex
         }
@@ -87,14 +87,14 @@ public extension String {
     
     func toBytes() throws -> Data {
         guard let bytes = data(using: .utf8) else {
-            throw ErrorTonSdkSwift("Convert to data utf8 failed")
+            throw ErrorTonSdkSwift("Convert to data utf8 failed for: \(self)")
         }
         return bytes
     }
     
     func base64ToBytes() throws -> Data {
         guard let data = Data(base64Encoded: self) else {
-            throw ErrorTonSdkSwift("Convert base64 to data failed")
+            throw ErrorTonSdkSwift("Convert base64 to data failed for: \(self)")
         }
         return data
     }
@@ -134,7 +134,7 @@ public extension Data {
     
     func toString() throws -> String {
         guard let str = String(data: self, encoding: .utf8) else {
-            throw ErrorTonSdkSwift("Convert data to string failed")
+            throw ErrorTonSdkSwift("Convert data to string failed for \(self.bytes.join(", "))")
         }
         return str
     }
