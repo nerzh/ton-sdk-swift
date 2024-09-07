@@ -370,7 +370,7 @@ open class Hashmap<K, V> {
         guard let match = matches[0] else {
             throw ErrorTonSdkSwift("\(#function) \(#line) wrong bits \(matches.description)")
         }
-        let repeated = try match.split(separator: "").map { number in try Bit(Int(number)!) }
+        let repeated = try match.map { number in try Bit(Int(String(number))!) }
         let labelShort = try serializeLabelShort(label)
         let labelLong = try serializeLabelLong(label, m)
         
