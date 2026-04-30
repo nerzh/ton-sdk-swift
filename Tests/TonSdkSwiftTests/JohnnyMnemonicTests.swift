@@ -6,7 +6,7 @@
 //
 
 import XCTest
-import TonSdkSwift
+@testable import TonSdkSwift
 import SwiftExtensionsPack
 
 final class JohnnyMnemonicTests: XCTestCase {

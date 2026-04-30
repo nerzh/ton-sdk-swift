@@ -47,33 +47,6 @@ public final class TonMnemonic {
         self.password = password
     }
     
-    public class func generateWordsTon(words: TonMnemonic.WordsBitsOfEntropy) throws -> [String] {
-        /// bits for 0-2047 number of words array
-        let numberBits: UInt = 11
-        /// bip39 CS = ENT / 32
-        let checkSummLength = words.rawValue / 32
-        let bytes = randomBytes(count: words.rawValue / 8)
-        var bits = bytes.map {
-            var bitString = $0.toBits()
-            if bitString.count < 8 {
-                bitString = String(repeating: "0", count: 8 - bitString.count) + bitString
-            }
-            return bitString
-        }.joined()
-        bits += Data(SEPCrypto.SHA.sha256.digest(data: Data(bytes))).toBits()[0..<Int(checkSummLength)].map { String($0.rawValue) }.joined()
-        let bitChunks = bits.chunks(Int(numberBits))
-        var result: [String] = .init()
-        
-        for chunk in bitChunks {
-            guard let number = Int(chunk, radix: 2) else {
-                throw ErrorTonSdkSwift("Convert bits \(chunk) to Int failed")
-            }
-            result.append(TonMnemonic.ENGLISH_WORDS[number])
-        }
-        
-        return result
-    }
-    
     public class func mnemonicToEntropy(mnemonicArray: [String], password: Data? = nil) -> Data {
         let mnemonicData: Data = .init(mnemonicArray.joined(separator: " ").utf8)
         let password: Data = password ?? .init()
@@ -106,13 +79,12 @@ public final class TonMnemonic {
     
     public class func generateSeed(wordsCount: TonMnemonic.WordsBitsOfEntropy, password: Data? = nil) throws -> [String] {
         do {
-            var mnemonicArray: [String] = try generateWordsTon(words: wordsCount)
             while true {
+                let mnemonicArray: [String] = try generateWordsTon(words: wordsCount)
                 if try isValidMnemonic(mnemonicArray, password: password) {
-                    break
+                    return mnemonicArray
                 }
             }
-            return mnemonicArray
         } catch {
             throw ErrorTonSdkSwift(error)
         }
@@ -158,6 +130,33 @@ public final class TonMnemonic {
         let entropy = Self.mnemonicToEntropy(mnemonicArray: mnemonicArray, password: password)
         let digest: PKCS5.PBKDF2 = try .init(password: entropy.bytes, salt: salt.bytes, iterations: Self.TON_PBKDF_ITERATIONS, keyLength: 64, variant: .sha2(.sha512))
         return try Data(digest.calculate())
+    }
+    
+    internal class func generateWordsTon(words: TonMnemonic.WordsBitsOfEntropy) throws -> [String] {
+        /// bits for 0-2047 number of words array
+        let numberBits: UInt = 11
+        /// bip39 CS = ENT / 32
+        let checkSummLength = words.rawValue / 32
+        let bytes = randomBytes(count: words.rawValue / 8)
+        var bits = bytes.map {
+            var bitString = $0.toBits()
+            if bitString.count < 8 {
+                bitString = String(repeating: "0", count: 8 - bitString.count) + bitString
+            }
+            return bitString
+        }.joined()
+        bits += Data(SEPCrypto.SHA.sha256.digest(data: Data(bytes))).toBits()[0..<Int(checkSummLength)].map { String($0.rawValue) }.joined()
+        let bitChunks = bits.chunks(Int(numberBits))
+        var result: [String] = .init()
+        
+        for chunk in bitChunks {
+            guard let number = Int(chunk, radix: 2) else {
+                throw ErrorTonSdkSwift("Convert bits \(chunk) to Int failed")
+            }
+            result.append(TonMnemonic.ENGLISH_WORDS[number])
+        }
+        
+        return result
     }
     
     private class func normalizeMnemonic(words: [String]) -> [String] {

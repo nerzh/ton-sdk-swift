@@ -7,7 +7,7 @@ let name: String = "TonSdkSwift"
 
 var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/nerzh/swift-regular-expression", .upToNextMajor(from: "0.2.3")),
-    .package(url: "https://github.com/bytehubio/BigInt", exact: "5.3.0"),
+    .package(url: "https://github.com/bytehubio/BigInt", branch: "master"),
     .package(url: "https://github.com/nerzh/swift-extensions-pack", .upToNextMajor(from: "2.0.3")),
     .package(url: "https://github.com/apple/swift-crypto", .upToNextMajor(from: "4.5.0")),
     .package(url: "https://github.com/bytehubio/CryptoSwift", .upToNextMajor(from: "1.8.1")),
@@ -24,7 +24,7 @@ var mainTarget: [Target.Dependency] = [
 ]
 
 var testTarget: [Target.Dependency] = mainTarget + [
-    .init(stringLiteral: name)
+    .target(name: name)
 ]
 
 let package = Package(
@@ -50,5 +50,4 @@ let package = Package(
         ),
     ]
 )
-
 
