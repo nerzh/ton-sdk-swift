@@ -105,20 +105,29 @@ public final class TonMnemonic {
     }
     
     public class func generateSeed(wordsCount: TonMnemonic.WordsBitsOfEntropy, password: Data? = nil) throws -> [String] {
-        var mnemonicArray: [String] = []
-        while true {
-            mnemonicArray = try generateWordsTon(words: wordsCount)
-            if let password, !password.isEmpty {
-                if !(try isPasswordNeeded(mnemonicArray: mnemonicArray)) {
-                    continue
+        do {
+            var mnemonicArray: [String] = try generateWordsTon(words: wordsCount)
+            while true {
+                if try isValidMnemonic(mnemonicArray, password: password) {
+                    break
                 }
             }
-            if !(try isBasicSeed(entropy: mnemonicToEntropy(mnemonicArray: mnemonicArray, password: password))) {
-                continue
-            }
-            break
+            return mnemonicArray
+        } catch {
+            throw ErrorTonSdkSwift(error)
         }
-        return mnemonicArray
+    }
+    
+    public class func isValidMnemonic(_ mnemonic: [String], password: Data? = nil) throws -> Bool {
+        if let password, !password.isEmpty {
+            if !(try isPasswordNeeded(mnemonicArray: mnemonic)) {
+                return false
+            }
+        }
+        if !(try isBasicSeed(entropy: mnemonicToEntropy(mnemonicArray: mnemonic, password: password))) {
+            return false
+        }
+        return true
     }
     
     public class func mnemonicToKeyPairs(mnemonicArray: [String], password: Data? = nil) throws -> Keys {
