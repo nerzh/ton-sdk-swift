@@ -7,7 +7,8 @@
 
 import Foundation
 import SwiftExtensionsPack
-import enum CryptoSwift.PKCS5
+import Crypto
+import CryptoExtras
 
 public final class TonMnemonic {
     public static let TON_PBKDF_ITERATIONS = 100_000
@@ -58,8 +59,7 @@ public final class TonMnemonic {
         guard let salt = TON_SEED_SALT.data(using: .utf8) else {
             throw ErrorTonSdkSwift("Bad salt \(TON_SEED_SALT)")
         }
-        let digest: PKCS5.PBKDF2 = try .init(password: entropy.bytes, salt: salt.bytes, iterations: iter, keyLength: 64, variant: .sha2(.sha512))
-        return try digest.calculate().first == 0
+        return try pbkdf2SHA512(password: entropy, salt: salt, iterations: iter, keyLength: 64).first == 0
     }
     
     public class func isPasswordSeed(entropy: Data) throws -> Bool {
@@ -67,9 +67,7 @@ public final class TonMnemonic {
         guard let salt = TON_PASSWORD_SALT.data(using: .utf8) else {
             throw ErrorTonSdkSwift("Bad ton_password_salt \(TON_PASSWORD_SALT)")
         }
-        let digest: PKCS5.PBKDF2 = try .init(password: entropy.bytes, salt: salt.bytes, iterations: iter, keyLength: 64, variant: .sha2(.sha512))
-        
-        return try digest.calculate().first == 1
+        return try pbkdf2SHA512(password: entropy, salt: salt, iterations: iter, keyLength: 64).first == 1
     }
     
     public class func isPasswordNeeded(mnemonicArray: [String]) throws -> Bool {
@@ -128,8 +126,18 @@ public final class TonMnemonic {
     
     public class func mnemonicToSeed(mnemonicArray: [String], salt: Data, password: Data?) throws -> Data {
         let entropy = Self.mnemonicToEntropy(mnemonicArray: mnemonicArray, password: password)
-        let digest: PKCS5.PBKDF2 = try .init(password: entropy.bytes, salt: salt.bytes, iterations: Self.TON_PBKDF_ITERATIONS, keyLength: 64, variant: .sha2(.sha512))
-        return try Data(digest.calculate())
+        return try pbkdf2SHA512(password: entropy, salt: salt, iterations: Self.TON_PBKDF_ITERATIONS, keyLength: 64)
+    }
+
+    private class func pbkdf2SHA512(password: Data, salt: Data, iterations: Int, keyLength: Int) throws -> Data {
+        let key = try KDF.Insecure.PBKDF2.deriveKey(
+            from: password,
+            salt: salt,
+            using: .sha512,
+            outputByteCount: keyLength,
+            unsafeUncheckedRounds: iterations
+        )
+        return key.withUnsafeBytes { Data($0) }
     }
     
     internal class func generateWordsTon(words: TonMnemonic.WordsBitsOfEntropy) throws -> [String] {
