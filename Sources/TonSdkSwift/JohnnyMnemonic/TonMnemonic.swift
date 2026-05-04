@@ -7,8 +7,15 @@
 
 import Foundation
 import SwiftExtensionsPack
+#if canImport(CommonCrypto)
+import CommonCrypto
+import CryptoKit
+#elseif canImport(CryptoExtras)
 import Crypto
 import CryptoExtras
+#elseif canImport(Crypto)
+import Crypto
+#endif
 
 public final class TonMnemonic {
     public static let TON_PBKDF_ITERATIONS = 100_000
@@ -130,6 +137,41 @@ public final class TonMnemonic {
     }
 
     private class func pbkdf2SHA512(password: Data, salt: Data, iterations: Int, keyLength: Int) throws -> Data {
+        #if canImport(CommonCrypto)
+        guard iterations > 0 else {
+                throw ErrorTonSdkSwift("PBKDF2 iterations must be greater than zero")
+            }
+
+            guard keyLength > 0 else {
+                throw ErrorTonSdkSwift("PBKDF2 keyLength must be greater than zero")
+            }
+
+            var derivedKey = Data(count: keyLength)
+
+            let status = derivedKey.withUnsafeMutableBytes { derivedKeyBuffer in
+                password.withUnsafeBytes { passwordBuffer in
+                    salt.withUnsafeBytes { saltBuffer in
+                        CCKeyDerivationPBKDF(
+                            CCPBKDFAlgorithm(kCCPBKDF2),
+                            passwordBuffer.bindMemory(to: Int8.self).baseAddress,
+                            passwordBuffer.count,
+                            saltBuffer.bindMemory(to: UInt8.self).baseAddress,
+                            saltBuffer.count,
+                            CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA512),
+                            UInt32(iterations),
+                            derivedKeyBuffer.bindMemory(to: UInt8.self).baseAddress,
+                            derivedKeyBuffer.count
+                        )
+                    }
+                }
+            }
+
+            guard status == kCCSuccess else {
+                throw ErrorTonSdkSwift("PBKDF2 failed with CommonCrypto status \(status)")
+            }
+
+            return derivedKey
+        #else
         let key = try KDF.Insecure.PBKDF2.deriveKey(
             from: password,
             salt: salt,
@@ -138,6 +180,7 @@ public final class TonMnemonic {
             unsafeUncheckedRounds: iterations
         )
         return key.withUnsafeBytes { Data($0) }
+        #endif
     }
     
     internal class func generateWordsTon(words: TonMnemonic.WordsBitsOfEntropy) throws -> [String] {

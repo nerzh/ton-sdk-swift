@@ -17,7 +17,7 @@ var mainTarget: [Target.Dependency] = [
     .product(name: "SwiftRegularExpression", package: "swift-regular-expression"),
     .product(name: "SwiftExtensionsPack", package: "swift-extensions-pack"),
     .product(name: "BigInt", package: "BigInt"),
-    .product(name: "Crypto", package: "swift-crypto"),
+    .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.android, .driverKit, .linux, .openbsd, .wasi, .windows])),
     .product(name: "CryptoExtras", package: "swift-crypto"),
     .product(name: "SwiftNetLayer", package: "swift-net-layer"),
 ]
