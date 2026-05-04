@@ -9,7 +9,7 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/nerzh/swift-regular-expression", .upToNextMajor(from: "0.2.3")),
     .package(url: "https://github.com/bytehubio/BigInt", .upToNextMajor(from: "5.7.0")),
     .package(url: "https://github.com/nerzh/swift-extensions-pack", .upToNextMajor(from: "2.0.3")),
-    .package(url: "https://github.com/apple/swift-crypto", .upToNextMajor(from: "4.5.0")),
+    .package(url: "https://github.com/bytehubio/swift-crypto", .upToNextMajor(from: "4.5.0")),
     .package(url: "https://github.com/nerzh/swift-net-layer", .upToNextMajor(from: "1.6.2")),
 ]
 
