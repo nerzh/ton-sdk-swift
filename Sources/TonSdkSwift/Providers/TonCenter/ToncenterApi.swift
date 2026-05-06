@@ -45,17 +45,17 @@ open class ToncenterApi: SNLResource {
 
 
 
-public extension ToncenterApi {
+extension ToncenterApi {
     
-    func jsonRpc() -> ToncenterApiJsonRPCTarget {
+    public func jsonRpc() -> ToncenterApiJsonRPCTarget {
         ToncenterApiJsonRPCTarget(resource: self, path: "/jsonRPC")
     }
 }
 
 
-public extension ToncenterApi {
+extension ToncenterApi {
     
-    class func getJsonBody(id: Int = 1, jsonrpc: String = "2.0", method: String, params: [String: Any?]) -> String {
+    public static func getJsonBody(id: Int = 1, jsonrpc: String = "2.0", method: String, params: [String: Any?]) -> String {
         let model: ToncenterApi.ToncenterApiRawRequest<AnyValue> = .init(jsonrpc: jsonrpc,
                                                                          id: id,
                                                                          method: method,

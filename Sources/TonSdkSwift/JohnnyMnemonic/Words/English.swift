@@ -7,9 +7,9 @@
 
 import Foundation
 
-public extension TonMnemonic {
+extension TonMnemonic {
     
-    static var ENGLISH_WORDS: [String] {
+    public static var ENGLISH_WORDS: [String] {
         [
             "abandon",
             "ability",

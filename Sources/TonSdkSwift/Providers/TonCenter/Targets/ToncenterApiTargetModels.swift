@@ -10,10 +10,10 @@ import BigInt
 import SwiftExtensionsPack
 
 
-public extension ToncenterApi {
+extension ToncenterApi {
     
     //MARK: resp req wrappers
-    struct ToncenterApiRawRequest<T: Encodable>: Encodable {
+    public struct ToncenterApiRawRequest<T: Encodable>: Encodable {
         public var jsonrpc: String
         public var id: Int
         public var method: String
@@ -21,7 +21,7 @@ public extension ToncenterApi {
     }
     
     /// "{\"ok\":true,\"result\":{\"@type\":\"ok\",\"@extra\":\"1677190769.4780862:4:0.47718457038890816\"},\"jsonrpc\":\"2.0\",\"id\":\"1\"}"
-    struct ToncenterApiJsonrpcResponse<T: Decodable>: Decodable {
+    public struct ToncenterApiJsonrpcResponse<T: Decodable>: Decodable {
         public var ok: Bool
         public var result: T?
         public var jsonrpc: String?
@@ -30,7 +30,7 @@ public extension ToncenterApi {
         public var code: Int?
     }
     
-    struct TransactionModel: Codable {
+    public struct TransactionModel: Codable {
         public var transaction_id: TransactionId
         public var utime: Int
         public var fee: String
@@ -73,7 +73,7 @@ public extension ToncenterApi {
         }
     }
     
-    struct Account: Codable {
+    public struct Account: Codable {
         public var code: String
         public var data: String
         public var state: String

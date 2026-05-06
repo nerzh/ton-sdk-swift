@@ -49,19 +49,19 @@ public final class TonMnemonic {
     
     public init(mnemonicString: String, password: Data? = nil) throws {
         self.mnemonicArray = mnemonicString.components(separatedBy: .whitespaces)
-        self.wordsCount = try .get(by: UInt(mnemonicArray.count))
+        self.wordsCount = try WordsBitsOfEntropy(rawValue: UInt(mnemonicArray.count)).unwrap
         self.keys = try Self.mnemonicToPrivateKey(mnemonicArray: mnemonicArray, password: password)
         self.seed = mnemonicString
         self.password = password
     }
     
-    public class func mnemonicToEntropy(mnemonicArray: [String], password: Data? = nil) -> Data {
+    public static func mnemonicToEntropy(mnemonicArray: [String], password: Data? = nil) -> Data {
         let mnemonicData: Data = .init(mnemonicArray.joined(separator: " ").utf8)
         let password: Data = password ?? .init()
         return SEPCrypto.HMAC.sha512.digest(data: password, key: mnemonicData)
     }
     
-    public class func isBasicSeed(entropy: Data) throws -> Bool {
+    public static func isBasicSeed(entropy: Data) throws -> Bool {
         let iter = max(1, TON_PBKDF_ITERATIONS / 256)
         guard let salt = TON_SEED_SALT.data(using: .utf8) else {
             throw ErrorTonSdkSwift("Bad salt \(TON_SEED_SALT)")
@@ -69,7 +69,7 @@ public final class TonMnemonic {
         return try pbkdf2SHA512(password: entropy, salt: salt, iterations: iter, keyLength: 64).first == 0
     }
     
-    public class func isPasswordSeed(entropy: Data) throws -> Bool {
+    public static func isPasswordSeed(entropy: Data) throws -> Bool {
         let iter = 1
         guard let salt = TON_PASSWORD_SALT.data(using: .utf8) else {
             throw ErrorTonSdkSwift("Bad ton_password_salt \(TON_PASSWORD_SALT)")
@@ -77,12 +77,12 @@ public final class TonMnemonic {
         return try pbkdf2SHA512(password: entropy, salt: salt, iterations: iter, keyLength: 64).first == 1
     }
     
-    public class func isPasswordNeeded(mnemonicArray: [String]) throws -> Bool {
+    public static func isPasswordNeeded(mnemonicArray: [String]) throws -> Bool {
         let passlessEntropy = mnemonicToEntropy(mnemonicArray: mnemonicArray)
         return try isPasswordSeed(entropy: passlessEntropy) && !(try isBasicSeed(entropy: passlessEntropy))
     }
     
-    public class func generateSeed(wordsCount: TonMnemonic.WordsBitsOfEntropy, password: Data? = nil) throws -> [String] {
+    public static func generateSeed(wordsCount: TonMnemonic.WordsBitsOfEntropy, password: Data? = nil) throws -> [String] {
         do {
             while true {
                 let mnemonicArray: [String] = try generateWordsTon(words: wordsCount)
@@ -95,7 +95,7 @@ public final class TonMnemonic {
         }
     }
     
-    public class func isValidMnemonic(_ mnemonic: [String], password: Data? = nil) throws -> Bool {
+    public static func isValidMnemonic(_ mnemonic: [String], password: Data? = nil) throws -> Bool {
         if let password, !password.isEmpty {
             if !(try isPasswordNeeded(mnemonicArray: mnemonic)) {
                 return false
@@ -107,7 +107,7 @@ public final class TonMnemonic {
         return true
     }
     
-    public class func mnemonicToKeyPairs(mnemonicArray: [String], password: Data? = nil) throws -> Keys {
+    public static func mnemonicToKeyPairs(mnemonicArray: [String], password: Data? = nil) throws -> Keys {
         let mnemonicArray = normalizeMnemonic(words: mnemonicArray)
         guard let salt = TON_KEYS_SALT.data(using: .utf8) else {
             throw ErrorTonSdkSwift("Bad TON_KEYS_SALT \(TON_KEYS_SALT)")
@@ -116,12 +116,12 @@ public final class TonMnemonic {
         return try seedToKeyPairs(seed32Byte: seed[0..<32])
     }
     
-    public class func seedToKeyPairs(seed32Byte: Data) throws -> Keys {
+    public static func seedToKeyPairs(seed32Byte: Data) throws -> Keys {
         let keyPair = SEPCrypto.Ed25519.createKeyPair(seed32Byte: seed32Byte)
         return (public: keyPair.public, secret: seed32Byte)
     }
     
-    public class func mnemonicToPrivateKey(mnemonicArray: [String], password: Data? = nil) throws -> Keys {
+    public static func mnemonicToPrivateKey(mnemonicArray: [String], password: Data? = nil) throws -> Keys {
         let mnemonicArray = normalizeMnemonic(words: mnemonicArray)
         guard let salt = TON_KEYS_SALT.data(using: .utf8) else {
             throw ErrorTonSdkSwift("Bad TON_KEYS_SALT \(TON_KEYS_SALT)")
@@ -131,7 +131,7 @@ public final class TonMnemonic {
         return (public: keyPair.public, secret: seed[0..<32])
     }
     
-    public class func mnemonicToSeed(mnemonicArray: [String], salt: Data, password: Data?) throws -> Data {
+    public static func mnemonicToSeed(mnemonicArray: [String], salt: Data, password: Data?) throws -> Data {
         let entropy = Self.mnemonicToEntropy(mnemonicArray: mnemonicArray, password: password)
         return try pbkdf2SHA512(password: entropy, salt: salt, iterations: Self.TON_PBKDF_ITERATIONS, keyLength: 64)
     }

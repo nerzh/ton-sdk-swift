@@ -106,7 +106,7 @@ open class Boc {
         }
     }
 
-    public class func deserializeFift(data: String) throws -> [Cell] {
+    public static func deserializeFift(data: String) throws -> [Cell] {
         guard !data.isEmpty else {
             throw ErrorTonSdkSwift("Can't deserialize. Empty fift hex.")
         }
@@ -167,7 +167,7 @@ open class Boc {
     }
     
     
-    public class func deserializeHeader(bytes: Data) throws -> BocHeader {
+    public static func deserializeHeader(bytes: Data) throws -> BocHeader {
         guard bytes.count >= 4 + 1 else {
             throw ErrorTonSdkSwift("Not enough bytes for magic prefix")
         }
@@ -267,7 +267,7 @@ open class Boc {
     }
     
     
-    public class func deserializeCell(remainder: Data, refIndexSize: Int) throws -> CellData {
+    public static func deserializeCell(remainder: Data, refIndexSize: Int) throws -> CellData {
         if remainder.count < 2 {
             throw ErrorTonSdkSwift("Not enough bytes to encode cell descriptors")
         }
@@ -343,7 +343,7 @@ open class Boc {
         return CellData(pointer: pointer, remainder: mutableRemainder)
     }
 
-    public class func deserialize(data: Data, checkMerkleProofs: Bool = false) throws -> [Cell] {
+    public static func deserialize(data: Data, checkMerkleProofs: Bool = false) throws -> [Cell] {
         var hasMerkleProofs = false
         var pointers: [CellPointer] = []
         let header: BocHeader = try deserializeHeader(bytes: data)
@@ -398,7 +398,7 @@ open class Boc {
         }
     }
     
-    public class func depthFirstSort(root: [Cell]) throws -> (cells: [Cell], hashmap: [String: Int]) {
+    public static func depthFirstSort(root: [Cell]) throws -> (cells: [Cell], hashmap: [String: Int]) {
         #warning("fix multiple root cells serialization")
         var stack: [CellNode] = [CellNode(cell: try Cell(refs: root), children: root.count, scanned: 0)]
         var cells: [(cell: Cell, hash: String)] = []
@@ -451,7 +451,7 @@ open class Boc {
     }
 
 
-    public class func breadthFirstSort(root: [Cell]) throws -> (cells: [Cell], hashmap: [String: Int]) {
+    public static func breadthFirstSort(root: [Cell]) throws -> (cells: [Cell], hashmap: [String: Int]) {
         var stack = root
         var cells: [(cell: Cell, hash: String, deleted: Bool)] = try root.map { ($0, try $0.hash(), false) }
         var hashIndexes: [String: Int] = Dictionary(uniqueKeysWithValues: cells.enumerated().map { ($1.hash, $0) })
@@ -495,7 +495,7 @@ open class Boc {
         return (resultCells, hashmap)
     }
     
-    public class func serializeCell(cell: Cell, hashmap: [String: Int], refIndexSize: Int) throws -> [Bit] {
+    public static func serializeCell(cell: Cell, hashmap: [String: Int], refIndexSize: Int) throws -> [Bit] {
         let representation = cell.getRefsDescriptor() + cell.getBitsDescriptor() + cell.getAugmentedBits()
         let serialized = try cell.refs.reduce(into: representation) { acc, ref in
             if let refIndex = hashmap[try ref.hash()] {
@@ -508,7 +508,7 @@ open class Boc {
         return serialized
     }
 
-    public class func serialize(root: [Cell], options: BOCOptions = .init()) throws -> Data {
+    public static func serialize(root: [Cell], options: BOCOptions = .init()) throws -> Data {
         // TODO: test more than 1 root cells support
         let hasIndex = options.hasIndex ?? false
         let hasCacheBits = options.hasCacheBits ?? false

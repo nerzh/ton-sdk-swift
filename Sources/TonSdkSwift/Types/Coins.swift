@@ -269,17 +269,17 @@ extension Coins: Equatable, Comparable, Hashable {
 
 
 
-public extension String {
+extension String {
     
-    var isValidCoinsAmount: Bool {
+    public var isValidCoinsAmount: Bool {
         self[(#"(^\d+$|(^\d+\.\d+$))"#)]
     }
     
-    var toCoins: Coins {
+    public var toCoins: Coins {
         toCoins(decimals: 9)
     }
     
-    func toCoins(decimals: Int) -> Coins {
+    public func toCoins(decimals: Int) -> Coins {
         do {
             return try toCoinsThrowing(decimals: decimals)
         } catch {
@@ -287,7 +287,7 @@ public extension String {
         }
     }
     
-    func toCoinsThrowing(decimals: Int) throws -> Coins {
+    public func toCoinsThrowing(decimals: Int) throws -> Coins {
         if decimals < 0 { throw ErrorTonSdkSwift("toCoinsThrowing: negative decimals \(decimals)") }
         let balance: String = self.replace(#","#, ".").replace(#"\.$"#, "")
         

@@ -42,17 +42,17 @@ public enum Bit: UInt8, Comparable, LosslessStringConvertible, Equatable {
     }
 }
 
-public extension Array where Element == Bit {
+extension Array where Element == Bit {
     
-    var bitsUInt8: [UInt8] {
+    public var bitsUInt8: [UInt8] {
         map { $0.rawValue }
     }
     
-    init(_ bits: [UInt8]) {
+    public init(_ bits: [UInt8]) {
         self = bits.map { $0 < 1 ? .b0 : .b1 }
     }
     
-    func augment(divider: Int = 8) -> Self {
+    public func augment(divider: Int = 8) -> Self {
         var bitsCopy = self
         let amount = divider - (count % divider)
         var overage: [Bit] = .init(repeating: .b0, count: amount)
@@ -65,7 +65,7 @@ public extension Array where Element == Bit {
         return bitsCopy
     }
     
-    func rollback() throws -> Self {
+    public func rollback() throws -> Self {
         var oneBitExist: Bool = false
         var index = count - 1
         var result: [Bit] = .init()
@@ -87,11 +87,11 @@ public extension Array where Element == Bit {
         return result.reversed()
     }
     
-    mutating func selfRollback() throws {
+    public mutating func selfRollback() throws {
         self = try rollback()
     }
     
-    func toBigUInt() -> BigUInt {
+    public func toBigUInt() -> BigUInt {
         var result = BigUInt(0)
         for bit in self {
             result <<= 1
@@ -100,7 +100,7 @@ public extension Array where Element == Bit {
         return result
     }
     
-    func toBigInt() -> BigInt {
+    public func toBigInt() -> BigInt {
         if isEmpty { return 0 }
         
         let uint = BigInt(toBigUInt())
@@ -111,7 +111,7 @@ public extension Array where Element == Bit {
         return value
     }
     
-    func toHex() throws -> String {
+    public func toHex() throws -> String {
         
         guard count % 4 == 0 else {
             throw ErrorTonSdkSwift("Bits amount must be multiple of 4")
@@ -127,7 +127,7 @@ public extension Array where Element == Bit {
         return hexString
     }
     
-    func toBytes() throws -> Data {
+    public func toBytes() throws -> Data {
         try toHex().hexToBytes()
     }
 }
