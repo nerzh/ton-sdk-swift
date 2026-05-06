@@ -49,7 +49,7 @@ public final class TonMnemonic {
     
     public init(mnemonicString: String, password: Data? = nil) throws {
         self.mnemonicArray = mnemonicString.components(separatedBy: .whitespaces)
-        self.wordsCount = try WordsBitsOfEntropy(rawValue: UInt(mnemonicArray.count)).unwrap
+        self.wordsCount = try .init(rawValue: UInt(mnemonicArray.count)).unwrap
         self.keys = try Self.mnemonicToPrivateKey(mnemonicArray: mnemonicArray, password: password)
         self.seed = mnemonicString
         self.password = password
@@ -187,8 +187,8 @@ public final class TonMnemonic {
         /// bits for 0-2047 number of words array
         let numberBits: UInt = 11
         /// bip39 CS = ENT / 32
-        let checkSummLength = words.rawValue / 32
-        let bytes = randomBytes(count: words.rawValue / 8)
+        let checkSummLength = words.count / 32
+        let bytes = randomBytes(count: words.count / 8)
         var bits = bytes.map {
             var bitString = $0.toBits()
             if bitString.count < 8 {
