@@ -11,7 +11,7 @@ import SwiftExtensionsPack
 
 public final class ToncenterApiJsonRPCTarget: SNLTarget {
     
-    public func send(boc: String) async throws -> ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue> {
+    public func send(boc: String, debug: Bool = false) async throws -> ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue> {
         let json: String = ToncenterApi.getJsonBody(method: "sendBoc",
                                                     params: ["boc": boc])
         return try await makeExecutor(target: self,
@@ -19,11 +19,12 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                       method: .post,
                                       requestParams: params,
                                       body: json.data(using: .utf8)
-        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self)
+        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
     }
     
     public func getAddressInformation(
-        address: String
+        address: String,
+        debug: Bool = false
     ) async throws -> ToncenterApi.ToncenterApiJsonrpcResponse<ToncenterApi.Account> {
         let json: String = ToncenterApi.getJsonBody(method: "getAddressInformation",
                                                     params: [
@@ -34,7 +35,7 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                       method: .post,
                                       requestParams: params,
                                       body: json.data(using: .utf8)
-        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<ToncenterApi.Account>.self)
+        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<ToncenterApi.Account>.self, debug: debug)
     }
     
     public func getTransactions(
@@ -43,7 +44,8 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
         lt: String? = nil,
         to_lt: String? = nil,
         hash: String? = nil,
-        archival: Bool = true
+        archival: Bool = true,
+        debug: Bool = false
     ) async throws -> ToncenterApi.ToncenterApiJsonrpcResponse<[ToncenterApi.TransactionModel]> {
         let json: String = ToncenterApi.getJsonBody(method: "getTransactions",
                                                     params: [
@@ -59,10 +61,10 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                       method: .post,
                                       requestParams: params,
                                       body: json.data(using: .utf8)
-        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<[ToncenterApi.TransactionModel]>.self)
+        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<[ToncenterApi.TransactionModel]>.self, debug: debug)
     }
     
-    public func getExtendedAddressInformation(address: String) async throws -> ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue> {
+    public func getExtendedAddressInformation(address: String, debug: Bool = false) async throws -> ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue> {
         let json: String = ToncenterApi.getJsonBody(method: "getExtendedAddressInformation",
                                                     params: ["address": address])
         return try await makeExecutor(target: self,
@@ -70,10 +72,10 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                       method: .post,
                                       requestParams: params,
                                       body: json.data(using: .utf8)
-        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self)
+        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
     }
     
-    public func getAddressBalance(address: String) async throws -> ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue> {
+    public func getAddressBalance(address: String, debug: Bool = false) async throws -> ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue> {
         let json: String = ToncenterApi.getJsonBody(method: "getAddressBalance",
                                                     params: ["address": address])
         return try await makeExecutor(target: self,
@@ -81,10 +83,10 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                       method: .post,
                                       requestParams: params,
                                       body: json.data(using: .utf8)
-        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self)
+        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
     }
     
-    public func getAddressState(address: String) async throws -> ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue> {
+    public func getAddressState(address: String, debug: Bool = false) async throws -> ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue> {
         let json: String = ToncenterApi.getJsonBody(method: "getAddressState",
                                                     params: ["address": address])
         return try await makeExecutor(target: self,
@@ -92,10 +94,10 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                       method: .post,
                                       requestParams: params,
                                       body: json.data(using: .utf8)
-        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self)
+        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
     }
     
-    public func getTokenData(address: String) async throws -> ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue> {
+    public func getTokenData(address: String, debug: Bool = false) async throws -> ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue> {
         let json: String = ToncenterApi.getJsonBody(method: "getTokenData",
                                                     params: ["address": address])
         return try await makeExecutor(target: self,
@@ -103,10 +105,12 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                       method: .post,
                                       requestParams: params,
                                       body: json.data(using: .utf8)
-        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self)
+        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
     }
     
-    public func runGetMethod(address: String, method: String, stack: [[String]]) async throws -> ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue> {
+    public func runGetMethod(
+        address: String, method: String, stack: [[String]], debug: Bool = false
+    ) async throws -> ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue> {
         let json: String = ToncenterApi.getJsonBody(method: "runGetMethod",
                                                     params: ["address": address, "method": method, "stack": stack])
         return try await makeExecutor(target: self,
@@ -114,7 +118,7 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                       method: .post,
                                       requestParams: params,
                                       body: json.data(using: .utf8)
-        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self)
+        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
     }
     
     public func estimateFee(
@@ -122,7 +126,8 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
         body: String,
         initCode: String,
         initData: String,
-        ignoreChksig: Bool
+        ignoreChksig: Bool,
+        debug: Bool = false
     ) async throws -> ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue> {
         let json: String = ToncenterApi.getJsonBody(method: "estimateFee",
                                                     params: [
@@ -137,7 +142,7 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                       method: .post,
                                       requestParams: params,
                                       body: json.data(using: .utf8)
-        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self)
+        ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
     }
 }
 

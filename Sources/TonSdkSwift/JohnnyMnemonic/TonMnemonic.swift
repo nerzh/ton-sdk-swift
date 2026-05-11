@@ -135,6 +135,33 @@ public final class TonMnemonic {
         let entropy = Self.mnemonicToEntropy(mnemonicArray: mnemonicArray, password: password)
         return try pbkdf2SHA512(password: entropy, salt: salt, iterations: Self.TON_PBKDF_ITERATIONS, keyLength: 64)
     }
+    
+    static func generateWordsTon(words: TonMnemonic.WordsBitsOfEntropy) throws -> [String] {
+        /// bits for 0-2047 number of words array
+        let numberBits: UInt = 11
+        /// bip39 CS = ENT / 32
+        let checkSummLength = words.count / 32
+        let bytes = randomBytes(count: words.count / 8)
+        var bits = bytes.map {
+            var bitString = $0.toBits()
+            if bitString.count < 8 {
+                bitString = String(repeating: "0", count: 8 - bitString.count) + bitString
+            }
+            return bitString
+        }.joined()
+        bits += Data(SEPCrypto.SHA.sha256.digest(data: Data(bytes))).toBits()[0..<Int(checkSummLength)].map { String($0.rawValue) }.joined()
+        let bitChunks = bits.chunks(Int(numberBits))
+        var result: [String] = .init()
+        
+        for chunk in bitChunks {
+            guard let number = Int(chunk, radix: 2) else {
+                throw ErrorTonSdkSwift("Convert bits \(chunk) to Int failed")
+            }
+            result.append(TonMnemonic.ENGLISH_WORDS[number])
+        }
+        
+        return result
+    }
 
     private class func pbkdf2SHA512(password: Data, salt: Data, iterations: Int, keyLength: Int) throws -> Data {
         #if canImport(CommonCrypto)
@@ -181,33 +208,6 @@ public final class TonMnemonic {
         )
         return key.withUnsafeBytes { Data($0) }
         #endif
-    }
-    
-    internal class func generateWordsTon(words: TonMnemonic.WordsBitsOfEntropy) throws -> [String] {
-        /// bits for 0-2047 number of words array
-        let numberBits: UInt = 11
-        /// bip39 CS = ENT / 32
-        let checkSummLength = words.count / 32
-        let bytes = randomBytes(count: words.count / 8)
-        var bits = bytes.map {
-            var bitString = $0.toBits()
-            if bitString.count < 8 {
-                bitString = String(repeating: "0", count: 8 - bitString.count) + bitString
-            }
-            return bitString
-        }.joined()
-        bits += Data(SEPCrypto.SHA.sha256.digest(data: Data(bytes))).toBits()[0..<Int(checkSummLength)].map { String($0.rawValue) }.joined()
-        let bitChunks = bits.chunks(Int(numberBits))
-        var result: [String] = .init()
-        
-        for chunk in bitChunks {
-            guard let number = Int(chunk, radix: 2) else {
-                throw ErrorTonSdkSwift("Convert bits \(chunk) to Int failed")
-            }
-            result.append(TonMnemonic.ENGLISH_WORDS[number])
-        }
-        
-        return result
     }
     
     private class func normalizeMnemonic(words: [String]) -> [String] {
