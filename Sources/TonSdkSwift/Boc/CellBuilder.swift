@@ -171,6 +171,9 @@ open class CellBuilder {
             try storeBits(.init([0, 0]))
             return self
         }
+        guard address.hash.count == 32 else {
+            throw ErrorTonSdkSwift("Builder: standard address hash must contain 32 bytes.")
+        }
         
         let anycast = 0
         let addressBitsSize = 2 + 1 + 8 + 256
@@ -231,8 +234,8 @@ open class CellBuilder {
         return data
     }
 
-    public func cell(_ type: CellType = .ordinary) throws -> Cell {
-        return try Cell(bits: bits, refs: refs, type: type)
+    public func cell(_ type: CellType = .ordinary, compatibility: CellCompatibility = .ton) throws -> Cell {
+        return try Cell(bits: bits, refs: refs, type: type, compatibility: compatibility)
     }
 
     private func checkBitsOverflow(_ size: Int) throws {

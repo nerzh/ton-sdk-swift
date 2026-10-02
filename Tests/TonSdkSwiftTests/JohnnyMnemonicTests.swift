@@ -8,6 +8,7 @@
 import XCTest
 import TonSdkSwift
 import SwiftExtensionsPack
+//@testable import TonSdkSwift
 
 final class JohnnyMnemonicTests: XCTestCase {
     
@@ -17,10 +18,11 @@ final class JohnnyMnemonicTests: XCTestCase {
         XCTAssertEqual(hash, "9e9ba97d5b6f703b6f71fc7288998673fa8a339c700663020553ddfa39af33062ee51c331301aaf18b79bb107c42a4b550d74469af0498f75a382712866bfa94")
     }
     
-//    func testGenerateWords() async throws {
-//        let words = try TonMnemonic.generateWordsTon(words: .w12)
+    func testGenerateWords() async throws {
+        let words = try TonMnemonic.generateSeed(wordsCount: .w24)
+        print(words.joined(separator: " "))
 //        XCTAssertEqual(words.count, 12)
-//    }
+    }
     
     func testBasicSeed() async throws {
         let isBasicSeed = try TonMnemonic.isBasicSeed(entropy: "5f97f8ee98d10b5d3d077fbded838b9c949915e062f89cf38606c65cdbc9fcb13f210264a9f1b7e8b5a54faecb325cac790423bfe389c14fe36751588b8a934a".hexToBytes())

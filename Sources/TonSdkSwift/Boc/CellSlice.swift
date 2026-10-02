@@ -9,12 +9,20 @@ import Foundation
 import BigInt
 
 open class CellSlice: Equatable {
-    public var bits: [Bit]
-    public var refs: [Cell]
-    
-    public init(bits: [Bit], refs: [Cell]) {
+    open var bits: [Bit]
+    open var refs: [Cell]
+    public let sourceCell: Cell?
+    public let initialBitCount: Int
+    public let initialRefCount: Int
+    open var consumedRefs: Int { initialRefCount - refs.count }
+    open var consumedBits: Int { initialBitCount - bits.count }
+
+    public init(bits: [Bit], refs: [Cell], sourceCell: Cell? = nil) {
         self.bits = bits
         self.refs = refs
+        self.sourceCell = sourceCell
+        self.initialBitCount = bits.count
+        self.initialRefCount = refs.count
     }
     
     public static func == (lhs: CellSlice, rhs: CellSlice) -> Bool {
@@ -24,7 +32,7 @@ open class CellSlice: Equatable {
     
     @discardableResult
     public func skipBits(size: Int) throws -> Self {
-        if bits.count < size {
+        if size < 0 || bits.count < size {
             throw ErrorTonSdkSwift("Slice: bits underflow.")
         }
         
@@ -33,7 +41,7 @@ open class CellSlice: Equatable {
     }
     
     public func skipRefs(size: Int) throws -> Self {
-        if refs.count < size {
+        if size < 0 || refs.count < size {
             throw ErrorTonSdkSwift("Slice: refs underflow.")
         }
         
@@ -42,8 +50,10 @@ open class CellSlice: Equatable {
     }
     
     public func skipDict() throws -> Self {
-        let isEmpty = try loadBit().rawValue == 0
-        return isEmpty ? try skipRefs(size: 1) : self
+        let present = try preloadBit() == .b1
+        if present { _ = try preloadRef() }
+        try skipBits(size: 1)
+        return present ? try skipRefs(size: 1) : self
     }
     
     @discardableResult
@@ -51,7 +61,7 @@ open class CellSlice: Equatable {
         try skipBits(size: size)
     }
     
-    public func loadRef() throws -> Cell {
+    open func loadRef() throws -> Cell {
         if refs.isEmpty {
             throw ErrorTonSdkSwift("Slice: refs underflow.")
         }
@@ -59,7 +69,7 @@ open class CellSlice: Equatable {
         return refs.removeFirst()
     }
     
-    public func preloadRef() throws -> Cell {
+    open func preloadRef() throws -> Cell {
         if refs.isEmpty {
             throw ErrorTonSdkSwift("Slice: refs underflow.")
         }
@@ -175,11 +185,13 @@ open class CellSlice: Equatable {
     }
     
     public func loadBytes(size: Int) throws -> Data {
+        guard size >= 0, size <= bits.count / 8 else { throw ErrorTonSdkSwift("Slice: bytes underflow.") }
         let bits = try loadBits(size: size * 8)
         return try bits.toBytes()
     }
     
     public func preloadBytes(size: Int) throws -> Data {
+        guard size >= 0, size <= bits.count / 8 else { throw ErrorTonSdkSwift("Slice: bytes underflow.") }
         let bits = try preloadBits(size: size * 8)
         return try bits.toBytes()
     }
@@ -273,33 +285,12 @@ open class CellSlice: Equatable {
     }
     
     public func loadDict<K,V>(keySize: Int, options: HashmapOptions<K,V>? = nil) throws -> HashmapE<K,V> {
-        let dictConstructor = try loadBit()
-        let isEmpty = dictConstructor == .b0
-        
-        if !isEmpty {
-            return try HashmapE.parse(
-                keySize: keySize,
-                slice: CellSlice(bits: [dictConstructor], refs: [loadRef()]),
-                options: options
-            )
-        } else {
-            return try HashmapE(keySize: keySize, options: options)
-        }
+        try HashmapE.parse(keySize: keySize, slice: self, options: options)
     }
     
     public func preloadDict<K,V>(keySize: Int, options: HashmapOptions<K,V>? = nil) throws -> HashmapE<K,V> {
-        let dictConstructor = try preloadBit()
-        let isEmpty = dictConstructor == .b0
-        
-        if !isEmpty {
-            return try HashmapE.parse(
-                keySize: keySize,
-                slice: CellSlice(bits: [dictConstructor], refs: [preloadRef()]),
-                options: options
-            )
-        } else {
-            return try HashmapE(keySize: keySize, options: options)
-        }
+        let cursor = CellSlice(bits: bits, refs: refs, sourceCell: sourceCell)
+        return try HashmapE.parse(keySize: keySize, slice: cursor, options: options)
     }
     
     public func loadUnaryLength() throws -> Int {
@@ -311,14 +302,13 @@ open class CellSlice: Equatable {
     }
     
     public func preloadUnaryLength() throws -> Int {
-        var cursor: Int = 0
-        while self.bits[cursor] == .b1 {
-            cursor += 1
+        guard let terminator = bits.firstIndex(of: .b0) else {
+            throw ErrorTonSdkSwift("Slice: unterminated unary length.")
         }
-        return cursor
+        return terminator
     }
     
     public static func parse(cell: Cell) -> CellSlice {
-        .init(bits: cell.bits, refs: cell.refs)
+        cell.parse()
     }
 }

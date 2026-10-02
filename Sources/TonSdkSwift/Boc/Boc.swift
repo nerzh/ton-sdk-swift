@@ -11,6 +11,7 @@ import SwiftExtensionsPack
 
 open class Boc {
     static let REACH_BOC_MAGIC_PREFIX = "B5EE9C72".hexToBytesUnsafe()
+    static let BIG_BOC_MAGIC_PREFIX = "B6FF9A73".hexToBytesUnsafe()
     static let LEAN_BOC_MAGIC_PREFIX = "68FF65F3".hexToBytesUnsafe()
     static let LEAN_BOC_MAGIC_PREFIX_CRC = "ACC3A728".hexToBytesUnsafe()
 
@@ -43,6 +44,10 @@ open class Boc {
         public var totCellsSize: BigUInt
         public var rootList: [BigUInt]
         public var cellsData: Data
+        /// Cumulative cell ends, excluding cache flag bits.
+        public var indexOffsets: [Int] = []
+        public var bigCellsNum: Int = 0
+        public var bigCellsSize: Int = 0
         
         public init(hasIndex: Bool, hashCrc32: Int? = nil, hasCacheBits: Bool, flags: UInt8, sizeBytes: Int, offsetBytes: UInt8, cellsNum: BigUInt, rootsNum: BigUInt, absentNum: BigUInt, totCellsSize: BigUInt, rootList: [BigUInt], cellsData: Data) {
             self.hasIndex = hasIndex
@@ -87,6 +92,9 @@ open class Boc {
         public var type: CellType
         public var builder: CellBuilder
         public var refs: [BigUInt]
+        public var declaredMask: UInt32?
+        public var storedHashes: [String] = []
+        public var storedDepths: [BigUInt] = []
         
         public init(cell: Cell? = nil, type: CellType, builder: CellBuilder, refs: [BigUInt]) {
             self.cell = cell
@@ -115,7 +123,7 @@ open class Boc {
         let matches = re.matches(in: data, options: [], range: NSRange(location: 0, length: data.utf16.count))
         
         guard !matches.isEmpty else {
-            fatalError("Can't deserialize. Bad fift hex.")
+            throw ErrorTonSdkSwift("Can't deserialize. Bad fift hex.")
         }
 
         if matches.count == 1 {
@@ -167,107 +175,81 @@ open class Boc {
     }
     
     
-    public static func deserializeHeader(bytes: Data) throws -> BocHeader {
-        guard bytes.count >= 4 + 1 else {
-            throw ErrorTonSdkSwift("Not enough bytes for magic prefix")
+    public static func deserializeHeader(bytes: Data, validateIndex: Bool = true) throws -> BocHeader {
+        let input = Array(bytes)
+        var cursor = 0
+        func take(_ count: Int) throws -> [UInt8] {
+            guard count >= 0, count <= input.count - cursor else { throw ErrorTonSdkSwift("Truncated BOC") }
+            defer { cursor += count }
+            return Array(input[cursor..<cursor + count])
         }
-
-        let crcbytes = bytes[0..<bytes.count - 4]
-        var mutableBytes = bytes
-        let prefix = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + 4]
-        mutableBytes.removeFirst(4)
-        let flagsByte = mutableBytes.removeFirst()
-        
-        var header = BocHeader(hasIndex: true,
-                               hashCrc32: nil,
-                               hasCacheBits: false,
-                               flags: 0,
-                               sizeBytes: Int(flagsByte),
-                               offsetBytes: .init(),
-                               cellsNum: .init(),
-                               rootsNum: .init(),
-                               absentNum: .init(),
-                               totCellsSize: .init(),
-                               rootList: .init(),
-                               cellsData: .init())
-
-        if prefix == REACH_BOC_MAGIC_PREFIX {
-            header.hasIndex = flagsByte & 128 != 0
-            header.hasCacheBits = flagsByte & 32 != 0
-            header.flags = (flagsByte & 16) * 2 + (flagsByte & 8)
-            header.sizeBytes = Int(flagsByte % 8)
-            header.hashCrc32 = Int(flagsByte) & 64
-        } else if prefix == LEAN_BOC_MAGIC_PREFIX {
-            header.hashCrc32 = 0
-        } else if prefix == LEAN_BOC_MAGIC_PREFIX_CRC {
-            header.hashCrc32 = 1
-        } else {
+        func number(_ count: Int) throws -> Int {
+            let value = try take(count).reduce(BigUInt(0)) { ($0 << 8) | BigUInt($1) }
+            guard let result = Int(exactly: value) else { throw ErrorTonSdkSwift("BOC counter overflow") }
+            return result
+        }
+        let magic = try Data(take(4))
+        let big = magic == BIG_BOC_MAGIC_PREFIX
+        let generic = magic == REACH_BOC_MAGIC_PREFIX || big
+        guard generic || magic == LEAN_BOC_MAGIC_PREFIX || magic == LEAN_BOC_MAGIC_PREFIX_CRC else {
             throw ErrorTonSdkSwift("bad magic prefix")
         }
-
-        guard bytes.count >= 1 + 5 * header.sizeBytes else {
-            throw ErrorTonSdkSwift("not enough bytes for encoding cells counters")
+        let flag = try number(1)
+        let size = generic ? flag & 7 : flag
+        let offset = try number(1)
+        let indexed = !generic || flag & 128 != 0
+        let crc = generic ? flag & 64 != 0 : magic == LEAN_BOC_MAGIC_PREFIX_CRC
+        let cache = generic && flag & 32 != 0
+        guard (1...4).contains(size), (1...8).contains(offset), !cache || indexed, !generic || flag & 24 == 0 else {
+            throw ErrorTonSdkSwift("Invalid BOC widths or cache flags")
         }
-
-        let offsetBytes = mutableBytes.removeFirst()
-        header.cellsNum = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + header.sizeBytes].toBigUInt()
-        mutableBytes.removeFirst(header.sizeBytes)
-        header.rootsNum = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + header.sizeBytes].toBigUInt()
-        mutableBytes.removeFirst(header.sizeBytes)
-        header.absentNum = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + header.sizeBytes].toBigUInt()
-        mutableBytes.removeFirst(header.sizeBytes)
-        header.totCellsSize = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + Int(offsetBytes)].toBigUInt()
-        mutableBytes.removeFirst(Int(offsetBytes))
-        header.offsetBytes = offsetBytes
-        
-        guard BigUInt(bytes.count) >= header.rootsNum * BigUInt(header.sizeBytes) else {
-            throw ErrorTonSdkSwift("not enough bytes for encoding root cells hashes")
-        }
-
-        header.rootList = (0..<header.rootsNum).map { _ in
-            let refIndex = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + header.sizeBytes].toBigUInt()
-            mutableBytes.removeFirst(header.sizeBytes)
-            return refIndex
-        }
-
-        if header.hasIndex {
-            guard bytes.count >= BigUInt(header.offsetBytes) * header.cellsNum else {
-                throw ErrorTonSdkSwift("not enough bytes for index encoding")
+        let cells = try number(size), roots = try number(size), absent = try number(size)
+        let total = try number(offset)
+        guard cells > 0, cells <= input.count / 2, roots > 0, roots <= 1024, roots <= cells, absent == 0,
+              generic || roots == 1 else { throw ErrorTonSdkSwift("Invalid BOC counters") }
+        let bigCount = big ? try number(size) : 0
+        let bigSize = big ? try number(offset) : 0
+        guard (!big || bigCount > 0), bigCount <= cells, bigSize <= total,
+              bigSize >= bigCount * 4, bigSize <= bigCount * (0xff_ffff + 4) else { throw ErrorTonSdkSwift("Invalid big cell counters") }
+        var rootList: [BigUInt] = []
+        if generic {
+            for _ in 0..<roots {
+                let index = try number(size)
+                guard index < cells else { throw ErrorTonSdkSwift("Invalid BOC root index") }
+                rootList.append(BigUInt(index))
             }
-            mutableBytes.removeFirst(Int(BigUInt(header.offsetBytes) * header.cellsNum))
-        }
-
-        guard bytes.count >= header.totCellsSize else {
-            throw ErrorTonSdkSwift("not enough bytes for cells data")
-        }
-        
-        header.cellsData = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + Int(header.totCellsSize)]
-        mutableBytes.removeFirst(Int(header.totCellsSize))
-
-        if header.hashCrc32 != nil && header.hashCrc32 != 0 {
-            guard bytes.count >= 4 else {
-                throw ErrorTonSdkSwift("not enough bytes for crc32c hashsum")
+        } else { rootList = [0] }
+        var indexOffsets: [Int] = []
+        if indexed {
+            guard cells <= (input.count - cursor) / offset else { throw ErrorTonSdkSwift("Truncated BOC index") }
+            var previous = 0
+            for _ in 0..<cells {
+                let encoded = try number(offset)
+                let end = cache ? encoded >> 1 : encoded
+                if validateIndex && (end <= previous || end > total) { throw ErrorTonSdkSwift("Invalid BOC index offset") }
+                indexOffsets.append(end)
+                previous = end
             }
-
-            let result = crcbytes.crc32cBytesLE()
-
-            let crc32Bytes = mutableBytes[mutableBytes.startIndex..<mutableBytes.startIndex + 4]
-            mutableBytes.removeFirst(4)
-            
-            if !(result == crc32Bytes) {
-                throw ErrorTonSdkSwift("crc32c hashsum mismatch")
-            }
+            if validateIndex && previous != total { throw ErrorTonSdkSwift("BOC index does not cover cell data") }
         }
-
-        guard mutableBytes.isEmpty else {
-            throw ErrorTonSdkSwift("too much bytes in boc serialization")
+        let data = try Data(take(total))
+        if crc {
+            let computed = Data(input[..<cursor]).crc32cBytesLE()
+            guard try Data(take(4)) == computed else { throw ErrorTonSdkSwift("crc32c hashsum mismatch") }
         }
-
+        guard cursor == input.count else { throw ErrorTonSdkSwift("too much bytes in boc serialization") }
+        var header = BocHeader(hasIndex: indexed, hashCrc32: crc ? 1 : 0, hasCacheBits: cache,
+                         flags: UInt8(generic ? (flag >> 3) & 3 : 0), sizeBytes: size, offsetBytes: UInt8(offset),
+                         cellsNum: BigUInt(cells), rootsNum: BigUInt(roots), absentNum: BigUInt(absent),
+                         totCellsSize: BigUInt(total), rootList: rootList, cellsData: data)
+        header.indexOffsets = indexOffsets
+        header.bigCellsNum = bigCount
+        header.bigCellsSize = bigSize
         return header
     }
-    
-    
+
     public static func deserializeCell(remainder: Data, refIndexSize: Int) throws -> CellData {
+        guard (1...4).contains(refIndexSize) else { throw ErrorTonSdkSwift("Invalid reference width") }
         if remainder.count < 2 {
             throw ErrorTonSdkSwift("Not enough bytes to encode cell descriptors")
         }
@@ -293,8 +275,9 @@ open class Boc {
 
         let isAugmented: Bool = (bitsDescriptor & 1) != 0
         let dataSize: Int = (Int(bitsDescriptor >> 1)) + (isAugmented ? 1 : 0)
-        let hashesSize: Int = Int(hasHashes ? (level + 1) * 32 : 0)
-        let depthSize: Int = Int(hasHashes ? (level + 1) * 2 : 0)
+        let hashCount = level.nonzeroBitCount + 1
+        let hashesSize: Int = hasHashes ? hashCount * 32 : 0
+        let depthSize: Int = hasHashes ? hashCount * 2 : 0
         
         let requiredBytes = hashesSize + depthSize + dataSize + refIndexSize * Int(totalRefs)
         
@@ -302,8 +285,21 @@ open class Boc {
             throw ErrorTonSdkSwift("Not enough bytes to encode cell data")
         }
 
+        var storedHashes: [String] = [], storedDepths: [BigUInt] = []
         if hasHashes {
-            mutableRemainder.removeFirst(hashesSize + depthSize)
+            for _ in 0..<hashCount {
+                storedHashes.append(try Data(mutableRemainder.prefix(32)).toHex())
+                mutableRemainder.removeFirst(32)
+            }
+            for _ in 0..<hashCount {
+                storedDepths.append(Data(mutableRemainder.prefix(2)).toBigUInt())
+                mutableRemainder.removeFirst(2)
+            }
+        }
+        if isAugmented {
+            guard dataSize > 0, mutableRemainder[mutableRemainder.startIndex + dataSize - 1] & 0x7f != 0 else {
+                throw ErrorTonSdkSwift("Invalid cell completion tag")
+            }
         }
 
         let bits = if isAugmented  {
@@ -327,7 +323,7 @@ open class Boc {
             type = .ordinary
         }
 
-        if isExotic && type == .ordinary {
+        if isExotic && (type == .ordinary || type == .big) {
             throw ErrorTonSdkSwift("An exotic cell can't be of ordinary type")
         }
 
@@ -337,51 +333,87 @@ open class Boc {
             return refBytes.toBigUInt()
         }
 
-        let pointer = try CellPointer(type: type, builder: CellBuilder(size: bits.count).storeBits(bits), refs: refs)
+        var pointer = try CellPointer(type: type, builder: CellBuilder(size: bits.count).storeBits(bits), refs: refs)
+        pointer.declaredMask = UInt32(level)
+        pointer.storedHashes = storedHashes
+        pointer.storedDepths = storedDepths
         
         
         return CellData(pointer: pointer, remainder: mutableRemainder)
     }
 
-    public static func deserialize(data: Data, checkMerkleProofs: Bool = false) throws -> [Cell] {
+    /// Decodes a BOC, preserving shared references. CRC is checked whenever present.
+    /// `checkMerkleProofs` requires at least one Merkle record; it does not establish
+    /// trust in a root hash. `checkMerkleMetadata` validates each record's embedded
+    /// hash/depth against its child and is enabled by default. Disable it only for
+    /// shape-only inspection of untrusted records, then authenticate with a trusted hash.
+    /// `maxDepth` is an additional decode bound; construction still respects
+    /// `compatibility` (TON: 1024, audited Everscale: 65534).
+    /// Index contents are validated by default. `validateIndex: false` accepts legacy
+    /// files with incorrect offsets, but never skips bounds, CRC or cell checks.
+    /// Big leaves are an Everscale extension and require `allowBigCells` explicitly.
+    public static func deserialize(data: Data, checkMerkleProofs: Bool = false, allowBigCells: Bool = false,
+                                   maxDepth: UInt16 = 2048, compatibility: CellCompatibility = .ton,
+                                   checkMerkleMetadata: Bool = true, validateIndex: Bool = true) throws -> [Cell] {
         var hasMerkleProofs = false
         var pointers: [CellPointer] = []
-        let header: BocHeader = try deserializeHeader(bytes: data)
+        let header: BocHeader = try deserializeHeader(bytes: data, validateIndex: validateIndex)
         let cellsNum: BigUInt = header.cellsNum
         let sizeBytes: Int = header.sizeBytes
         let cellsData: Data = header.cellsData
         let rootList: [BigUInt] = header.rootList
         
+        guard allowBigCells || header.bigCellsNum == 0 else { throw ErrorTonSdkSwift("Big cells are not allowed") }
+        var actualBigCount = 0
+        var actualBigSize = 0
         var remainder: Data = cellsData
-        for _ in 0..<cellsNum {
+        for cellIndex in 0..<Int(cellsNum) {
+            let expectedEnd = header.hasIndex && validateIndex ? header.indexOffsets[cellIndex] : nil
+            if remainder.first == 13 {
+                guard header.bigCellsNum > actualBigCount, remainder.count >= 4 else { throw ErrorTonSdkSwift("Unexpected big cell") }
+                let bytes = Array(remainder.prefix(4))
+                let count = Int(bytes[1]) << 16 | Int(bytes[2]) << 8 | Int(bytes[3])
+                guard count <= remainder.count - 4 else { throw ErrorTonSdkSwift("Truncated big cell") }
+                let cell = try Cell(bigData: Data(remainder.dropFirst(4).prefix(count)))
+                pointers.append(CellPointer(cell: cell, type: .big, builder: CellBuilder(), refs: []))
+                remainder.removeFirst(4 + count)
+                actualBigCount += 1
+                actualBigSize += 4 + count
+                if let expectedEnd, cellsData.count - remainder.count != expectedEnd { throw ErrorTonSdkSwift("BOC index cell boundary mismatch") }
+                continue
+            }
             let deserialized: CellData = try deserializeCell(remainder: remainder, refIndexSize: sizeBytes)
             remainder = deserialized.remainder
             pointers.append(deserialized.pointer)
+            if let expectedEnd, cellsData.count - remainder.count != expectedEnd { throw ErrorTonSdkSwift("BOC index cell boundary mismatch") }
         }
         
-        for index in 0..<pointers.count {
-            let pointerIndex = pointers.count - index - 1
+        guard actualBigCount == header.bigCellsNum, actualBigSize == header.bigCellsSize else { throw ErrorTonSdkSwift("Big cell counters mismatch") }
+        guard remainder.isEmpty else { throw ErrorTonSdkSwift("Unused BOC cell data") }
+        for pointerIndex in pointers.indices.reversed() {
+            if pointers[pointerIndex].type == .big { continue }
             let cellBuilder = pointers[pointerIndex].builder
             let cellType = pointers[pointerIndex].type
-
             for refIndex in pointers[pointerIndex].refs {
-                let refBuilder = pointers[Int(refIndex)].builder
-                let refType = pointers[Int(refIndex)].type
-
-                if refIndex < pointerIndex {
-                    throw ErrorTonSdkSwift("Topological order is broken")
-                }
-
-                if refType == .merkleProof || refType == .merkleUpdate {
-                    hasMerkleProofs = true
-                }
-                try cellBuilder.storeRef(refBuilder.cell(refType))
+                guard let index = Int(exactly: refIndex), index > pointerIndex, index < pointers.count,
+                      let child = pointers[index].cell else { throw ErrorTonSdkSwift("Invalid BOC reference or topological order") }
+                try cellBuilder.storeRef(child)
             }
-
-            if cellType == .merkleProof || cellType == .merkleUpdate {
-                hasMerkleProofs = true
+            hasMerkleProofs = hasMerkleProofs || cellType == .merkleProof || cellType == .merkleUpdate
+            pointers[pointerIndex].cell = try Cell(bits: cellBuilder.bits, refs: cellBuilder.refs, type: cellType,
+                                                   checkMerkleMetadata: checkMerkleMetadata, compatibility: compatibility)
+            let cell = pointers[pointerIndex].cell!
+            guard cell.mask.value == pointers[pointerIndex].declaredMask else { throw ErrorTonSdkSwift("Cell level mask mismatch") }
+            guard (0...3).allSatisfy({ cell.depth(UInt32($0)) <= maxDepth }) else { throw ErrorTonSdkSwift("Cell exceeds maximum BOC depth") }
+            if !pointers[pointerIndex].storedHashes.isEmpty {
+                let levels = (0...cell.mask.level).filter { cell.mask.isSignificant(level: $0) }
+                for (index, level) in levels.enumerated() {
+                    guard try cell.hash(level).lowercased() == pointers[pointerIndex].storedHashes[index].lowercased(),
+                          cell.depth(level) == pointers[pointerIndex].storedDepths[index] else {
+                        throw ErrorTonSdkSwift("Stored cell hash or depth mismatch")
+                    }
+                }
             }
-            pointers[pointerIndex].cell = try cellBuilder.cell(cellType)
         }
 
         if checkMerkleProofs && !hasMerkleProofs {
@@ -399,122 +431,88 @@ open class Boc {
     }
     
     public static func depthFirstSort(root: [Cell]) throws -> (cells: [Cell], hashmap: [String: Int]) {
-        #warning("fix multiple root cells serialization")
-        var stack: [CellNode] = [CellNode(cell: try Cell(refs: root), children: root.count, scanned: 0)]
-        var cells: [(cell: Cell, hash: String)] = []
-        var hashIndexes: [String: Int] = [:]
-
-        /// Process tree node to ordered cells list
-        func process(node: CellNode) throws {
-            var node = node
-            node.scanned += 1
-            let ref = node.cell.refs[node.scanned]
-            
-
-            let hash = try ref.hash()
-            if let index = hashIndexes[hash] {
-                cells.append(cells.remove(at: index))
-            } else {
-                cells.append((cell: ref, hash: hash))
-            }
-            
-            stack.append(CellNode(cell: ref, children: ref.refs.count, scanned: 0))
-
-            hashIndexes[hash] = cells.count - 1
-        }
-
-        /// Loop through multi-tree and make depth-first search till last node
-        while !stack.isEmpty {
-            var current = stack[stack.count - 1]
-
-            if current.children != current.scanned {
-                try process(node: current)
-            } else {
-                while !stack.isEmpty, let last = stack.last, last.children == last.scanned {
-                    stack.removeLast()
-                    current = stack.last!
-                }
-
-                if !stack.isEmpty {
-                    try process(node: current)
-                }
+        var seen = Set<String>()
+        var postorder: [Cell] = []
+        for cell in root {
+            var stack: [(Cell, Bool)] = [(cell, false)]
+            while let (current, post) = stack.popLast() {
+                if post { postorder.append(current); continue }
+                guard !current.isVirtualized else { throw ErrorTonSdkSwift("Cannot serialize a virtual cell") }
+                guard seen.insert(try current.hash().lowercased()).inserted else { continue }
+                stack.append((current, true))
+                for child in current.refs.reversed() { stack.append((child, false)) }
             }
         }
-
-        let resultCells = cells.compactMap { $0.cell }
+        let cells = Array(postorder.reversed())
         var hashmap: [String: Int] = [:]
-        for (i, cellHashTuple) in cells.enumerated() {
-            hashmap[cellHashTuple.hash] = i
-        }
-
-        return (cells: resultCells, hashmap: hashmap)
+        for (index, cell) in cells.enumerated() { hashmap[try cell.hash().lowercased()] = index }
+        return (cells, hashmap)
     }
 
-
+    /// Breadth-first topological order. A shared child is queued only after all
+    /// its parents, so every serialized reference still points forward.
     public static func breadthFirstSort(root: [Cell]) throws -> (cells: [Cell], hashmap: [String: Int]) {
-        var stack = root
-        var cells: [(cell: Cell, hash: String, deleted: Bool)] = try root.map { ($0, try $0.hash(), false) }
-        var hashIndexes: [String: Int] = Dictionary(uniqueKeysWithValues: cells.enumerated().map { ($1.hash, $0) })
-        
-        while !stack.isEmpty {
-            let count = stack.count
-            
-            var idx = 0
-            while idx < count {
-                let node = stack[idx]
-                try node.refs.forEach { ref in
-                    let hash = try ref.hash()
-                    if let index = hashIndexes[hash] {
-                        let val = cells[index]
-                        cells[index] = (cells[index].cell, cells[index].hash, true)
-                        cells.append(val)
-                    } else {
-                        cells.append((cell: ref, hash: hash, deleted: false))
-                    }
-                    
-                    stack.append(ref)
-                    hashIndexes[hash] = cells.count - 1
+        let graph = try depthFirstSort(root: root)
+        var incoming = Array(repeating: 0, count: graph.cells.count)
+        let children = try graph.cells.map { cell in
+            try cell.refs.map { child in
+                guard let index = graph.hashmap[try child.hash().lowercased()] else {
+                    throw ErrorTonSdkSwift("Missing BOC child")
                 }
-                idx += 1
-            }
-            
-            stack.shift(count)
-        }
-
-        var hashmap: [String: Int] = [:]
-        var resultCells: [Cell] = []
-        var order: Int = 0
-        for (index, (cell, hash, deleted)) in cells.enumerated() {
-            if !deleted {
-                hashmap[hash] = order
-                resultCells.append(cell)
-                order += 1
+                incoming[index] += 1
+                return index
             }
         }
-
-        return (resultCells, hashmap)
+        var queue = [Int]()
+        var queuedRoots = Set<Int>()
+        for cell in root {
+            guard let index = graph.hashmap[try cell.hash().lowercased()] else {
+                throw ErrorTonSdkSwift("Missing BOC root")
+            }
+            if incoming[index] == 0, queuedRoots.insert(index).inserted { queue.append(index) }
+        }
+        var cursor = 0
+        while cursor < queue.count {
+            let index = queue[cursor]
+            cursor += 1
+            for child in children[index] {
+                incoming[child] -= 1
+                if incoming[child] == 0 { queue.append(child) }
+            }
+        }
+        guard queue.count == graph.cells.count else { throw ErrorTonSdkSwift("Invalid BOC graph cycle") }
+        let cells = queue.map { graph.cells[$0] }
+        var hashmap = [String: Int]()
+        for (index, cell) in cells.enumerated() { hashmap[try cell.hash().lowercased()] = index }
+        return (cells, hashmap)
     }
-    
+
     public static func serializeCell(cell: Cell, hashmap: [String: Int], refIndexSize: Int) throws -> [Bit] {
+        guard (1...32).contains(refIndexSize), !cell.isVirtualized else { throw ErrorTonSdkSwift("Invalid cell serialization width or virtual cell") }
         let representation = cell.getRefsDescriptor() + cell.getBitsDescriptor() + cell.getAugmentedBits()
         let serialized = try cell.refs.reduce(into: representation) { acc, ref in
-            if let refIndex = hashmap[try ref.hash()] {
+            if let refIndex = hashmap[try ref.hash().lowercased()] {
+                guard refIndex >= 0, refIndex < (Int(1) << refIndexSize) else { throw ErrorTonSdkSwift("Reference index does not fit its width") }
                 let bits = try (0..<refIndexSize).map { i in
                     try Bit(((refIndex >> i) & 1) == 1 ? 1 : 0)
                 }
                 acc.append(contentsOf: bits.reversed())
-            }
+            } else { throw ErrorTonSdkSwift("Missing BOC child") }
         }
         return serialized
     }
 
     public static func serialize(root: [Cell], options: BOCOptions = .init()) throws -> Data {
-        // TODO: test more than 1 root cells support
         let hasIndex = options.hasIndex ?? false
         let hasCacheBits = options.hasCacheBits ?? false
         let hashCrc32 = options.hashCrc32 ?? true
         let topologicalOrder = options.topologicalOrder ?? "breadth-first"
         let flags = options.flags ?? 0
+
+        guard !root.isEmpty, root.count <= 1024, flags == 0, !hasCacheBits || hasIndex,
+              ["breadth-first", "depth-first"].contains(topologicalOrder) else {
+            throw ErrorTonSdkSwift("Invalid BOC roots or flags")
+        }
 
         let sortedCells: (cells: [Cell], hashmap: [String: Int])
         if topologicalOrder == "breadth-first" {
@@ -523,32 +521,45 @@ open class Boc {
             sortedCells = try depthFirstSort(root: root)
         }
 
+        guard try Set(root.map { try $0.hash().lowercased() }).count == root.count else {
+            throw ErrorTonSdkSwift("Duplicate BOC roots")
+        }
         let cellsList = sortedCells.cells
         let hashmap = sortedCells.hashmap
+        guard !cellsList.contains(where: { $0.compatibility == .everscale })
+                || !cellsList.contains(where: { $0.hasTONSpecificHashes }) else {
+            throw ErrorTonSdkSwift("A BOC cannot mix incompatible TON and Everscale hash policies")
+        }
 
         let cellsNum = cellsList.count
         let size = String(cellsNum, radix: 2).count
         let sizeBytes = max(Int(ceil(Double(size) / 8)), 1)
-        var cellsBits = [Bit]()
+        var cellsData = Data()
         var sizeIndex = [Int]()
-
+        var bigCount = 0, bigSize = 0
         for cell in cellsList {
-            let bits = try serializeCell(cell: cell, hashmap: hashmap, refIndexSize: sizeBytes * 8)
-            cellsBits += bits
-            sizeIndex.append(bits.count / 8)
+            if let payload = cell.bigData {
+                cellsData.append(13)
+                cellsData.append(contentsOf: [UInt8(payload.count >> 16), UInt8((payload.count >> 8) & 255), UInt8(payload.count & 255)])
+                cellsData.append(payload)
+                bigCount += 1
+                bigSize += 4 + payload.count
+            } else {
+                cellsData.append(try serializeCell(cell: cell, hashmap: hashmap, refIndexSize: sizeBytes * 8).toBytes())
+            }
+            sizeIndex.append(cellsData.count)
         }
-
-        let fullSize = cellsBits.count / 8
-        let offsetBits = String(fullSize, radix: 2).count
+        let fullSize = cellsData.count
+        let offsetBits = String(hasCacheBits ? fullSize * 2 : fullSize, radix: 2).count
         let offsetBytes = max(Int(ceil(Double(offsetBits) / 8)), 1)
         let builderSize = (32 + 3 + 2 + 3 + 8)
-            + (cellsBits.count)
-            + ((sizeBytes * 8) * 4)
+            + (bigCount > 0 ? (sizeBytes + offsetBytes) * 8 : 0)
+            + ((sizeBytes * 8) * (3 + root.count))
             + (offsetBytes * 8)
             + (hasIndex ? (cellsList.count * (offsetBytes * 8)) : 0)
 
         let result = CellBuilder(size: builderSize)
-        try result.storeBytes(REACH_BOC_MAGIC_PREFIX)
+        try result.storeBytes(bigCount > 0 ? BIG_BOC_MAGIC_PREFIX : REACH_BOC_MAGIC_PREFIX)
             .storeBit(hasIndex ? .b1 : .b0)
             .storeBit(hashCrc32 ? .b1 : .b0)
             .storeBit(hasCacheBits ? .b1 : .b0)
@@ -559,16 +570,22 @@ open class Boc {
             .storeUInt(BigUInt(root.count), sizeBytes * 8)
             .storeUInt(0, sizeBytes * 8)
             .storeUInt(BigUInt(fullSize), offsetBytes * 8)
-            .storeUInt(0, sizeBytes * 8)
+
+        if bigCount > 0 {
+            try result.storeUInt(BigUInt(bigCount), sizeBytes * 8).storeUInt(BigUInt(bigSize), offsetBytes * 8)
+        }
+        for cell in root {
+            guard let index = hashmap[try cell.hash().lowercased()] else { throw ErrorTonSdkSwift("Missing BOC root") }
+            try result.storeUInt(BigUInt(index), sizeBytes * 8)
+        }
 
         if hasIndex {
             for index in 0..<cellsList.count {
-                try result.storeUInt(BigUInt(sizeIndex[index]), offsetBytes * 8)
+                try result.storeUInt(BigUInt(hasCacheBits ? sizeIndex[index] * 2 : sizeIndex[index]), offsetBytes * 8)
             }
         }
 
-        let augmentedBits = try result.storeBits(cellsBits).bits.augment()
-        let bytes = try augmentedBits.toBytes()
+        let bytes = try result.bits.toBytes() + cellsData
 
         if hashCrc32 {
             let hashsum = bytes.crc32cBytesLE()
@@ -578,5 +595,4 @@ open class Boc {
         return bytes
     }
 }
-
 

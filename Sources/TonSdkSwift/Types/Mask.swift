@@ -25,27 +25,20 @@ public struct Mask {
     }
 
     public var level: UInt32 {
-        32 - countLeadingZeroes32(number: value)
+        UInt32(UInt32.bitWidth - value.leadingZeroBitCount)
     }
 
     public func isSignificant(level: UInt32) -> Bool {
-        level == 0 || (value >> (level - 1)) % 2 != 0
+        level == 0 || (level <= UInt32.bitWidth && (value >> (level - 1)) & 1 != 0)
     }
     
+    /// Keeps the lowest `level` bits. Widths at or above 32 preserve the full mask.
     public func apply(level: UInt32) -> Mask {
-        Mask(maskValue: value & ((1 << level) - 1))
-    }
-
-    private func countLeadingZeroes32(number: UInt32, size: UInt32 = 32) -> UInt32 {
-        let bitsString = String(number, radix: 2)
-        let sliceStartIndex = max(0, bitsString.count - Int(size))
-        let truncatedBitsString = String(bitsString.suffix(from: bitsString.index(bitsString.startIndex, offsetBy: sliceStartIndex)))
-        return size - UInt32(truncatedBitsString.count)
+        guard level < UInt32.bitWidth else { return Mask(maskValue: value) }
+        return Mask(maskValue: value & ((UInt32(1) << level) - 1))
     }
 
     private static func countSetBits(_ n: UInt32) -> UInt32 {
-        var count = n - ((n >> 1) & 0x55555555)
-        count = (count & 0x33333333) + ((count >> 2) & 0x33333333)
-        return ((count + (count >> 4) & 0xF0F0F0F) * 0x1010101) >> 24
+        UInt32(n.nonzeroBitCount)
     }
 }

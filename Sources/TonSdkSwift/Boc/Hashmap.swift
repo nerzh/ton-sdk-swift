@@ -9,12 +9,11 @@ import Foundation
 import BigInt
 
 public struct HashmapOptions<K, V> {
+    /// When supplied, must match the dictionary initializer's explicit keySize.
     public var keySize: Int?
-    #warning("prefixed - Not implemented yet")
-    @available(*, deprecated, message: "Not implemented yet")
+    @available(*, deprecated, message: "Use PfxHashmapE for prefix dictionaries")
     public var prefixed: Bool?
-    #warning("nonEmpty - Not implemented yet")
-    @available(*, deprecated, message: "Not implemented yet")
+    @available(*, deprecated, message: "Use Hashmap or RawHashmap.writeRoot for nonempty roots")
     public var nonEmpty: Bool?
     public var serializers: (key: (K) throws -> [Bit], value: (V) throws -> Cell)?
     public var deserializers: (key: ([Bit]) throws -> K, value: (Cell) throws -> V)?
@@ -52,14 +51,22 @@ public struct LazyDeserialize<Element> {
 
 open class Hashmap<K, V> {
     
-    public var hashmap: [String: Cell]
-    public var keySize: Int
+    public var hashmap: [String: Cell] { didSet { preservedRoot = nil } }
+    public var keySize: Int { didSet { preservedRoot = nil } }
+    fileprivate var preservedRoot: Cell?
     public var serializeKey: (K) throws -> [Bit]
     public var serializeValue: (V) throws -> Cell
     public var deserializeKey: ([Bit]) throws -> K
     public var deserializeValue: (Cell) throws -> V
     
     public init(keySize: Int, options: HashmapOptions<K, V>? = nil) throws {
+        try DictionaryLabel.validateWidth(keySize)
+        if let optionWidth = options?.keySize, optionWidth != keySize {
+            throw ErrorTonSdkSwift("Hashmap option keySize must match the explicit keySize")
+        }
+        guard options?.prefixed != true, options?.nonEmpty != true else {
+            throw ErrorTonSdkSwift("Use PfxHashmapE for prefix dictionaries and Hashmap for nonempty roots")
+        }
         let serializers: (key: (K) throws -> [Bit], value: (V) throws -> Cell) = options?.serializers ?? (key: { $0 as! [Bit] }, value: { $0 as! Cell })
         let deserializers: (key: ([Bit]) throws -> K, value: (Cell) throws -> V) = options?.deserializers ?? (key: { $0 as! K }, value: { $0 as! V })
         
@@ -92,18 +99,18 @@ open class Hashmap<K, V> {
     }
     
     public func makeIterator() throws -> AnyIterator<(LazyDeserialize<K>, LazyDeserialize<V>)> {
-        var iterator = hashmap.makeIterator()
+        var iterator = try sortHashmap().makeIterator()
         
         return AnyIterator {
-            guard let (k, v) = iterator.next() else { return nil }
-            let key = LazyDeserialize(closure: { try self.deserializeKey( Array(k).map { try Bit($0.wholeNumberValue!) } ) })
-            let value = LazyDeserialize(closure: { try self.deserializeValue(v) })
+            guard let node = iterator.next() else { return nil }
+            let key = LazyDeserialize(closure: { try self.deserializeKey(node.key) })
+            let value = LazyDeserialize(closure: { try self.deserializeValue(node.value) })
             return (key, value)
         }
     }
     
     public func get(_ key: K) throws -> V? {
-        let k = try serializeKey(key).map { String($0) }.joined()
+        let k = try checkedKey(key)
         guard let v = hashmap[k] else { return nil }
         return try deserializeValue(v)
     }
@@ -114,7 +121,7 @@ open class Hashmap<K, V> {
     
     @discardableResult
     public func set(_ key: K, _ value: V) throws -> Self {
-        let k = try serializeKey(key).map { String($0) }.joined()
+        let k = try checkedKey(key)
         let v = try serializeValue(value)
         hashmap[k] = v
         return self
@@ -155,7 +162,7 @@ open class Hashmap<K, V> {
     }
     
     public func delete(_ key: K) throws -> Self {
-        let k = try serializeKey(key).map { String($0) }.joined()
+        let k = try checkedKey(key)
         hashmap.removeValue(forKey: k)
         return self
     }
@@ -171,34 +178,42 @@ open class Hashmap<K, V> {
     }
     
     public func getRaw(_ key: [Bit]) -> Cell? {
-        hashmap[key.map { String($0) }.joined()]
+        guard key.count == keySize else { return nil }
+        return hashmap[key.map { String($0) }.joined()]
     }
     
+    /// Legacy nonthrowing insertion. Invalid key widths are ignored; use
+    /// setRawChecked to receive a validation error.
     @discardableResult
     public func setRaw(_ key: [Bit], _ value: Cell) -> Self {
+        guard key.count == keySize else { return self }
         hashmap[key.map { String($0) }.joined()] = value
         return self
     }
-    
-    fileprivate func sortHashmap() throws -> [HashmapNode] {
-        var sorted = [(order: Int, key: [Bit], value: Cell)]()
 
-        for (bitstring, value) in hashmap {
-            let key = try bitstring.map { try Bit(Int(String($0)) ?? 0) }
-            guard let order = Int(bitstring, radix: 2) else {
-                continue
-            }
-
-            if let lt = sorted.firstIndex(where: { $0.order < order }) {
-                sorted.insert((order: order, key: key, value: value), at: lt)
-            } else {
-                sorted.append((order: order, key: key, value: value))
-            }
-        }
-        
-        return sorted.map { .init(key: $0.key, value: $0.value) }
+    @discardableResult
+    public func setRawChecked(_ key: [Bit], _ value: Cell) throws -> Self {
+        try DictionaryLabel.validateKey(key, width: keySize)
+        return setRaw(key, value)
     }
-    
+
+    private func checkedKey(_ key: K) throws -> String {
+        let bits = try serializeKey(key)
+        try DictionaryLabel.validateKey(bits, width: keySize)
+        return bits.map { String($0) }.joined()
+    }
+
+    fileprivate func sortHashmap() throws -> [HashmapNode] {
+        try DictionaryLabel.validateWidth(keySize)
+        return try hashmap.sorted { $0.key < $1.key }.map { entry in
+            guard entry.key.count == keySize,
+                  entry.key.allSatisfy({ $0 == "0" || $0 == "1" }) else {
+                throw ErrorTonSdkSwift("Hashmap key has an invalid width or bit string")
+            }
+            return HashmapNode(key: entry.key.map { $0 == "0" ? .b0 : .b1 }, value: entry.value)
+        }
+    }
+
     public func buildMerkleProof(keys: [K]) throws -> Cell {
         var binaryKeys: [[Bit]] = .init()
         for (index, key) in keys.enumerated() {
@@ -211,8 +226,14 @@ open class Hashmap<K, V> {
             }
             binaryKeys.append(try serializeKey(key))
         }
-        let slice: CellSlice = try cell().parse()
-        
+        let encoded = try cell()
+        let slice: CellSlice
+        if self is HashmapE<K, V> {
+            guard let root = encoded.refs.first else { throw ErrorTonSdkSwift("Cannot prove an empty dictionary") }
+            slice = root.parse()
+        } else {
+            slice = encoded.parse()
+        }
         return try processMerkleProof(prefix: [], slice: slice, n: keySize, keyBits: binaryKeys).toMerkleProof()
     }
     
@@ -290,6 +311,7 @@ open class Hashmap<K, V> {
     }
     
     fileprivate func serialize() throws -> Cell {
+        if let preservedRoot { return preservedRoot }
         var nodes = try sortHashmap()
         guard !nodes.isEmpty else {
             throw ErrorTonSdkSwift("Hashmap: can't be empty. It must contain at least 1 key-value pair.")
@@ -299,12 +321,10 @@ open class Hashmap<K, V> {
     }
     
     fileprivate static func serializeEdge(_ nodes: inout [HashmapNode]) throws -> Cell {
-        // hme_empty$0
-        if nodes.isEmpty {
-            let label = try serializeLabelShort([])
-            return try CellBuilder().storeBits(label).cell()
+        guard !nodes.isEmpty else {
+            throw ErrorTonSdkSwift("A nonempty dictionary cannot contain an empty edge")
         }
-        
+
         let edge = CellBuilder()
         let label = try serializeLabel(&nodes)
         try edge.storeBits(label)
@@ -317,122 +337,31 @@ open class Hashmap<K, V> {
         
         // hmn_fork#_
         if nodes.count > 1 {
-            // Left edge can be empty, anyway we need to create hme_empty$0 to support right one
-            
+
             var (leftNodes, rightNodes) = serializeFork(nodes: &nodes)
             
             let leftEdge = try serializeEdge(&leftNodes)
             try edge.storeRef(leftEdge)
 
-            if !rightNodes.isEmpty {
-                let rightEdge = try serializeEdge(&rightNodes)
-                try edge.storeRef(rightEdge)
-            }
+            let rightEdge = try serializeEdge(&rightNodes)
+            try edge.storeRef(rightEdge)
         }
 
         return try edge.cell()
     }
     
     fileprivate static func serializeLabel(_ nodes: inout [HashmapNode]) throws -> [Bit] {
-        // Each label can always be serialized in at least two different fashions, using
-        // hml_short or hml_long constructors. Usually the shortest serialization (and
-        // in the case of a tie—the lexicographically smallest among the shortest) is
-        // preferred and is generated by TVM hashmap primitives, while the other
-        // variants are still considered valid.
-        
-        // Get nodes keys
-        guard 
-            let first = nodes.first?.key,
-            let last = nodes.last?.key
-        else {
-            throw ErrorTonSdkSwift("\(#function) \(#line) Bad nodes")
+        guard let first = nodes.first?.key, let last = nodes.last?.key else {
+            throw ErrorTonSdkSwift("Cannot serialize an empty dictionary edge")
         }
-        
-        // m = length at most possible bits of n (key)
-        let m = first.count
-        
-        var sameBitsIndex: Int?
-        for (index, element) in first.enumerated() {
-            if element != last[index] {
-                sameBitsIndex = index
-                break
-            }
-        }
-        let sameBitsLength = sameBitsIndex ?? first.count
-        
-        if m == 0 || first[0] != last[0] {
-            // hml_short for zero most possible bits
-            return try serializeLabelShort([])
-        }
-        
-        let label = Array(first[0..<sameBitsLength])
-        let matches = label.join("").regexp(#"(^0+)|(^1+)"#)
-        guard let match = matches[0] else {
-            throw ErrorTonSdkSwift("\(#function) \(#line) wrong bits \(matches.description)")
-        }
-        let repeated = try match.map { number in try Bit(Int(String(number))!) }
-        let labelShort = try serializeLabelShort(label)
-        let labelLong = try serializeLabelLong(label, m)
-        
-        let labelSame = nodes.count > 1 && repeated.count > 1
-            ? try serializeLabelSame(repeated, m)
-            : nil
-        
-        var labels: [(bits: Int, label: [Bit])] = [
-            (bits: label.count, label: labelShort),
-            (bits: label.count, label: labelLong)
-        ]
-        
-        if let labelSame {
-            labels.append((bits: repeated.count, label: labelSame))
-        }
-        
-        // Sort labels by their length
-        labels.sort { $0.label.count < $1.label.count }
-        
-        // Get most compact label
-        let choosen = labels[0]
-        
-        // Remove label bits from nodes keys
-        for (index, _) in nodes.enumerated() {
-            nodes[index].key.removeFirst(choosen.bits)
-        }
-        
-        return choosen.label
+        let length = DictionaryLabel.commonPrefix(first, last)
+        let label = Array(first.prefix(length))
+        let builder = CellBuilder()
+        try DictionaryLabel.write(label, maximum: first.count, to: builder)
+        for index in nodes.indices { nodes[index].key.removeFirst(length) }
+        return builder.bits
     }
 
-    
-    fileprivate static func serializeLabelSame(_ bits: [Bit], _ m: Int) throws -> [Bit] {
-        let label = CellBuilder()
-        
-        try label.storeBits([.b1, .b1])
-            .storeBit(bits[0])
-            .storeUInt(BigUInt(bits.count), Int(ceil(log2(Double(m + 1)))))
-        
-        return label.bits
-    }
-    
-    fileprivate static func serializeLabelLong(_ bits: [Bit], _ m: Int) throws -> [Bit] {
-        let label = CellBuilder()
-        
-        try label.storeBits([.b1, .b0])
-             .storeUInt(BigUInt(bits.count), Int(ceil(log2(Double(m + 1)))))
-             .storeBits(bits)
-        
-        return label.bits
-    }
-    
-    fileprivate static func serializeLabelShort(_ bits: [Bit]) throws -> [Bit] {
-        let label = CellBuilder()
-        
-        try label.storeBit(.b0)
-            .storeBits(Array(repeating: .b1, count: bits.count))
-            .storeBit(.b0)
-            .storeBits(bits)
-        
-        return label.bits
-    }
-    
     fileprivate static func serializeFork(nodes: inout [HashmapNode]) -> ([HashmapNode], [HashmapNode]) {
         var leftNodes = [HashmapNode]()
         var rightNodes = [HashmapNode]()
@@ -460,17 +389,25 @@ open class Hashmap<K, V> {
         slice: CellSlice,
         options: HashmapOptions<K, V>?
     ) throws -> Hashmap<K, V> {
+        if let source = slice.sourceCell, source.isExotic {
+            throw ErrorTonSdkSwift("Dictionary decoding requires an ordinary source cell")
+        }
         guard slice.bits.count >= 2 else {
             throw ErrorTonSdkSwift("Empty hashmap")
         }
 
         let hashmap = try Hashmap<K, V>(keySize: keySize, options: options)
-        let nodes = try Self.deserializeEdge(slice, keySize)
+        let originalRoot = try CellBuilder().storeSlice(slice).cell()
+        let cursor = CellSlice(bits: slice.bits, refs: slice.refs)
+        let nodes = try Self.deserializeEdge(cursor, keySize)
 
         for node in nodes {
             hashmap.setRaw(node.key, node.value)
         }
 
+        hashmap.preservedRoot = originalRoot
+        slice.bits = cursor.bits
+        slice.refs = cursor.refs
         return hashmap
     }
     
@@ -488,8 +425,13 @@ open class Hashmap<K, V> {
             return nodes + [.init(key: currentKey, value: value)]
         }
 
-        for i in 0..<edge.refs.count {
-            let forkEdge = try edge.loadRef().slice()
+        guard edge.bits.isEmpty, edge.refs.count == 2 else {
+            throw ErrorTonSdkSwift("Invalid dictionary fork")
+        }
+        for i in 0..<2 {
+            let child = try edge.loadRef()
+            guard !child.isExotic else { throw ErrorTonSdkSwift("Cannot eagerly decode an exotic dictionary edge") }
+            let forkEdge = child.slice()
             let forkKey = currentKey + [try Bit(i)]
 
             nodes += try deserializeEdge(forkEdge, keySize, forkKey)
@@ -499,19 +441,7 @@ open class Hashmap<K, V> {
     }
 
     public static func deserializeLabel(_ edge: CellSlice, _ m: Int) throws -> [Bit] {
-        // m = length at most possible bits of n (key)
-        // hml_short$0
-        if try edge.loadBit().rawValue == 0 {
-            return try deserializeLabelShort(edge)
-        }
-
-        // hml_long$10
-        if try edge.loadBit().rawValue == 0 {
-            return try deserializeLabelLong(edge, m)
-        }
-
-        // hml_same$11
-        return try deserializeLabelSame(edge, m)
+        try DictionaryLabel.read(from: edge, maximum: m)
     }
 
     public static func deserializeLabelShort(_ edge: CellSlice) throws -> [Bit] {
@@ -525,14 +455,18 @@ open class Hashmap<K, V> {
     }
 
     public static func deserializeLabelLong(_ edge: CellSlice, _ m: Int) throws -> [Bit] {
-        let length = try edge.loadBigUInt(size: Int(ceil(log2(Double(m + 1)))))
-        return try edge.loadBits(size: Int(length))
+        try DictionaryLabel.validateWidth(m)
+        let length = Int(try edge.loadBigUInt(size: DictionaryLabel.lengthWidth(m)))
+        guard length <= m else { throw ErrorTonSdkSwift("Invalid dictionary label length") }
+        return try edge.loadBits(size: length)
     }
 
     public static func deserializeLabelSame(_ edge: CellSlice, _ m: Int) throws -> [Bit] {
+        try DictionaryLabel.validateWidth(m)
         let repeated = try edge.loadBit()
-        let length = try edge.loadBigUInt(size: Int(ceil(log2(Double(m + 1)))))
-        return Array(repeating: repeated, count: Int(length))
+        let length = Int(try edge.loadBigUInt(size: DictionaryLabel.lengthWidth(m)))
+        guard length <= m else { throw ErrorTonSdkSwift("Invalid dictionary label length") }
+        return Array(repeating: repeated, count: length)
     }
 
     public func cell() throws -> Cell {
@@ -540,7 +474,7 @@ open class Hashmap<K, V> {
     }
     
     public func copy() throws -> Hashmap {
-        try .init(
+        let result = try Hashmap(
             hashmap: hashmap,
             keySize: keySize,
             serializeKey: serializeKey,
@@ -548,6 +482,8 @@ open class Hashmap<K, V> {
             deserializeKey: deserializeKey,
             deserializeValue: deserializeValue
         )
+        result.preservedRoot = preservedRoot
+        return result
     }
 
     public class func parse(
@@ -588,6 +524,9 @@ open class HashmapE<K, V>: Hashmap<K, V> {
     }
     
     public override func serialize() throws -> Cell {
+        if let preservedRoot {
+            return try CellBuilder().storeBit(.b1).storeRef(preservedRoot).cell()
+        }
         var nodes = try sortHashmap()
         let result = CellBuilder()
 
@@ -608,22 +547,32 @@ open class HashmapE<K, V>: Hashmap<K, V> {
         slice: CellSlice,
         options: HashmapOptions<K, V>? = nil
     ) throws -> HashmapE<K, V> {
-        guard slice.bits.count == 1 else {
+        if let source = slice.sourceCell, source.isExotic {
+            throw ErrorTonSdkSwift("Dictionary decoding requires an ordinary source cell")
+        }
+        guard !slice.bits.isEmpty else {
             throw ErrorTonSdkSwift("bad hashmap size flag")
         }
         
-        if try slice.loadBit() == .b0 {
-            return try HashmapE<K, V>(keySize: keySize, options: options)
+        let hashmap = try HashmapE<K, V>(keySize: keySize, options: options)
+        let cursor = CellSlice(bits: slice.bits, refs: slice.refs)
+        if try cursor.loadBit() == .b0 {
+            slice.bits = cursor.bits
+            return hashmap
         }
 
-        let hashmap = try HashmapE<K, V>(keySize: keySize, options: options)
-        let edge = try slice.loadRef().slice()
+        let originalRoot = try cursor.loadRef()
+        guard !originalRoot.isExotic else { throw ErrorTonSdkSwift("Cannot eagerly decode an exotic dictionary root") }
+        let edge = originalRoot.slice()
         let nodes = try Hashmap<K, V>.deserializeEdge(edge, keySize)
 
         for node in nodes {
             hashmap.setRaw(node.key, node.value)
         }
 
+        hashmap.preservedRoot = originalRoot
+        slice.bits = cursor.bits
+        slice.refs = cursor.refs
         return hashmap
     }
 
@@ -636,7 +585,7 @@ open class HashmapE<K, V>: Hashmap<K, V> {
     }
     
     public override func copy() throws -> HashmapE {
-        try .init(
+        let result = try HashmapE(
             hashmap: hashmap,
             keySize: keySize,
             serializeKey: serializeKey,
@@ -644,5 +593,7 @@ open class HashmapE<K, V>: Hashmap<K, V> {
             deserializeKey: deserializeKey,
             deserializeValue: deserializeValue
         )
+        result.preservedRoot = preservedRoot
+        return result
     }
 }

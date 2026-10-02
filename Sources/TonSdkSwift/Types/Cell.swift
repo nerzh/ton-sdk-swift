@@ -15,42 +15,107 @@ public enum CellType: Int8, Cases {
     case libraryReference = 2
     case merkleProof = 3
     case merkleUpdate = 4
+    case big = 5
+}
+
+/// Selects consensus-sensitive rules. TON remains the default.
+public enum CellCompatibility: Sendable {
+    case ton
+    /// Compatibility with the audited ever_block 1.11.22 snapshot, not all Everscale versions.
+    case everscale
+
+    public var maximumDepth: UInt32 { self == .ton ? 1024 : 65534 }
 }
 
 open class Cell: Equatable {
     public static let HASH_BITS: UInt32 = 256
     public static let DEPTH_BITS: UInt32 = 16
     
+    public let compatibility: CellCompatibility
+    internal private(set) var hasTONSpecificHashes = false
+    private var wrappedCell: Cell?
+    open var isVirtualized: Bool { wrappedCell?.isVirtualized ?? false }
+
     private var _bits: [Bit]
-    public var bits: [Bit] { _bits }
+    private var _bigData: Data?
+    open var bigData: Data? {
+        if let wrappedCell { return wrappedCell.bigData }
+        return _bigData
+    }
+    public var bitLength: Int { wrappedCell?.bitLength ?? (_bigData.map { $0.count * 8 } ?? _bits.count) }
+    open var bits: [Bit] { wrappedCell?.bits ?? (_bigData?.toBits() ?? _bits) }
     private var _refs: [Cell]
-    public var refs: [Cell] { _refs }
+    open var refs: [Cell] { wrappedCell?.refs ?? _refs }
     private var _type: CellType
-    public var type: CellType { _type }
+    open var type: CellType { wrappedCell?.type ?? _type }
     private var _mask: Mask
-    public var mask: Mask { _mask }
+    open var mask: Mask { wrappedCell?.mask ?? _mask }
     private var _hashes: [String]
-    public var hashes: [String] { _hashes }
+    open var hashes: [String] { wrappedCell?.hashes ?? _hashes }
     private var _depths: [BigUInt]
-    public var depths: [BigUInt] { _depths }
+    open var depths: [BigUInt] { wrappedCell?.depths ?? _depths }
     public var isExotic: Bool {
         type != .ordinary
     }
 
-    public init(bits: [Bit] = .init(), refs: [Cell] = .init(), type: CellType = .ordinary) throws {
-        let mapper = Self.getMapper(type: type)
+    /// Delegates to an existing cell without rebuilding its storage or losing view semantics.
+    public init(wrapping cell: Cell) {
+        wrappedCell = cell
+        compatibility = cell.compatibility
+        hasTONSpecificHashes = cell.hasTONSpecificHashes
+        _bits = cell._bits
+        _bigData = cell._bigData
+        _refs = cell._refs
+        _type = cell._type
+        _mask = cell._mask
+        _hashes = cell._hashes
+        _depths = cell._depths
+    }
+
+    /// EverBlock big cells are byte aligned leaves hashed directly from their payload.
+    public init(bigData: Data) throws {
+        compatibility = .everscale
+        guard bigData.count <= 0xff_ffff else { throw ErrorTonSdkSwift("Big cell data exceeds 16777215 bytes") }
+        _bits = []
+        _bigData = bigData
+        _refs = []
+        _type = .big
+        _mask = Mask(maskValue: 0)
+        _hashes = [try bigData.sha256()]
+        _depths = [0]
+    }
+
+    public init(bits: [Bit] = .init(), refs: [Cell] = .init(), type: CellType = .ordinary,
+                checkMerkleMetadata: Bool = true, compatibility: CellCompatibility = .ton) throws {
+        self.compatibility = compatibility
+        guard type != .big || compatibility == .everscale else { throw ErrorTonSdkSwift("Big cells require Everscale compatibility") }
+        guard compatibility != .ton || refs.allSatisfy({ $0.compatibility == .ton }) else { throw ErrorTonSdkSwift("TON cells cannot contain Everscale cells") }
+        guard compatibility != .everscale || !refs.contains(where: { $0.hasTONSpecificHashes }) else { throw ErrorTonSdkSwift("Everscale cells cannot contain TON-specific gapped hashes") }
+        let mapper = Self.getMapper(type: type, compatibility: compatibility)
         let validate = mapper.validate
         let mask = mapper.mask
         
-        try validate(bits, refs)
+        if !checkMerkleMetadata && type == .merkleProof {
+            try Self.validateMerkleProof(bits: bits, refs: refs, checkMetadata: false)
+        } else if !checkMerkleMetadata && type == .merkleUpdate {
+            try Self.validateMerkleUpdate(bits: bits, refs: refs, checkMetadata: false)
+        } else {
+            try validate(bits, refs)
+        }
         self._mask = mask(bits, refs)
+        self.hasTONSpecificHashes = refs.contains(where: { $0.hasTONSpecificHashes })
+            || (compatibility == .ton && type != .prunedBranch && [UInt32(2), 4, 5, 6].contains(self._mask.value))
         self._bits = bits
+        self._bigData = type == .big ? try bits.toBytes() : nil
         self._refs = refs
         self._type = type
         self._depths = []
         self._hashes = []
         
-        try initialize()
+        if type == .big {
+            _hashes = [try _bigData!.sha256()]
+            _depths = [0]
+        } else { try initialize() }
     }
     
     private func initialize() throws {
@@ -72,7 +137,10 @@ open class Cell: Equatable {
             }
             
             let refLevel = levelIndex + (isMerkle ? 1 : 0)
-            let refsDescriptor = getRefsDescriptor(mask.apply(level: levelIndex))
+            // TON uses the applied mask; the audited Everscale snapshot fills gaps.
+            let descriptorMask = compatibility == .everscale && !isPrunedBranch
+                ? Mask(maskValue: (1 << levelIndex) - 1) : mask.apply(level: levelIndex)
+            let refsDescriptor = getRefsDescriptor(descriptorMask)
             let bitsDescriptor = getBitsDescriptor()
             let data: [Bit]
 
@@ -88,6 +156,7 @@ open class Cell: Equatable {
 
             for ref in refs {
                 let refDepth = ref.depth(refLevel)
+                guard refDepth < compatibility.maximumDepth else { throw ErrorTonSdkSwift("Referenced cell exceeds construction depth") }
                 let refHash = try ref.hash(refLevel)
                 depthRepresentation += Cell.getDepthDescriptor(UInt32(refDepth))
                 hashRepresentation += refHash.hexToBits()
@@ -96,8 +165,8 @@ open class Cell: Equatable {
             
             let representation: [Bit] = refsDescriptor + bitsDescriptor + data + depthRepresentation + hashRepresentation
             
-            if refs.count > 0 && depth >= 1024 {
-                throw ErrorTonSdkSwift("Cell depth can't be more than 1024")
+            if refs.count > 0 && depth >= compatibility.maximumDepth {
+                throw ErrorTonSdkSwift("Cell exceeds maximum construction depth \(compatibility.maximumDepth)")
             }
 
             let dest = Int(hashIndex - hashIndexOffset)
@@ -132,7 +201,8 @@ open class Cell: Equatable {
     }
     
     public static func == (lhs: Cell, rhs: Cell) -> Bool {
-        (try? lhs.hash()) == (try? rhs.hash())
+        guard let left = try? lhs.hash(), let right = try? rhs.hash() else { return false }
+        return left.lowercased() == right.lowercased()
     }
     
     public static func validateOrdinary(bits: [Bit], refs: [Cell]) throws {
@@ -148,7 +218,7 @@ open class Cell: Equatable {
         }
     }
     
-    public static func validatePrunedBranch(bits: [Bit], refs: [Cell]) throws {
+    public static func validatePrunedBranch(bits: [Bit], refs: [Cell], compatibility: CellCompatibility = .ton) throws {
         let minSize = 8 + 8 + (1 * (HASH_BITS + DEPTH_BITS))
 
         if bits.count < minSize {
@@ -177,6 +247,12 @@ open class Cell: Equatable {
         if bits.count != size {
             throw ErrorTonSdkSwift("Pruned Branch cell with level \(mask.level) must have exactly \(size) bits, got \(bits.count)")
         }
+        for index in 0..<Int(hashCount) {
+            let start = 16 + Int(hashCount) * 256 + index * 16
+            guard Array(bits[start..<start + 16]).toBigUInt() <= compatibility.maximumDepth else {
+                throw ErrorTonSdkSwift("Pruned Branch exceeds maximum depth \(compatibility.maximumDepth)")
+            }
+        }
     }
     
     public static func validateLibraryReference(bits: [Bit], refs: [Cell]) throws {
@@ -198,7 +274,7 @@ open class Cell: Equatable {
         }
     }
     
-    public static func validateMerkleProof(bits: [Bit], refs: [Cell]) throws {
+    public static func validateMerkleProof(bits: [Bit], refs: [Cell], checkMetadata: Bool = true) throws {
         // Type + hash + depth
         let size = 8 + HASH_BITS + DEPTH_BITS
 
@@ -216,6 +292,7 @@ open class Cell: Equatable {
             throw ErrorTonSdkSwift("Merkle Proof cell type must be exactly \(CellType.merkleProof), got \(type)")
         }
 
+        guard checkMetadata else { return }
         let data = [Bit](bits[8...])
         let proofHash = try [Bit](Array(data[0..<Int(HASH_BITS)])).toHex()
         let proofDepth = [Bit](Array(data[Int(HASH_BITS)..<Int(HASH_BITS + DEPTH_BITS)])).toBigUInt()
@@ -231,7 +308,7 @@ open class Cell: Equatable {
         }
     }
     
-    public static func validateMerkleUpdate(bits: [Bit], refs: [Cell]) throws {
+    public static func validateMerkleUpdate(bits: [Bit], refs: [Cell], checkMetadata: Bool = true) throws {
         let size = 8 + (2 * (256 + 16))
         
         if bits.count != size {
@@ -248,7 +325,8 @@ open class Cell: Equatable {
             throw ErrorTonSdkSwift("Merkle Update cell type must be exactly \(CellType.merkleUpdate), got \(type)")
         }
         
-        let data = bits[8...]
+        guard checkMetadata else { return }
+        let data = Array(bits[8...])
         let hashes = [
             try [Bit](data[0..<256]).toHex(),
             try [Bit](data[256..<512]).toHex()
@@ -264,7 +342,7 @@ open class Cell: Equatable {
             let refHash = try ref.hash(0)
             let refDepth = ref.depth(0)
 
-            if proofHash != refHash {
+            if proofHash.lowercased() != refHash.lowercased() {
                 throw ErrorTonSdkSwift("Merkle Update cell ref #\(index) hash must be exactly '\(proofHash)', got '\(refHash)'")
             }
 
@@ -274,7 +352,7 @@ open class Cell: Equatable {
         }
     }
     
-    public static func getMapper(type: CellType) -> (validate: ([Bit], [Cell]) throws -> Void, mask: ([Bit], [Cell]) -> Mask) {
+    public static func getMapper(type: CellType, compatibility: CellCompatibility = .ton) -> (validate: ([Bit], [Cell]) throws -> Void, mask: ([Bit], [Cell]) -> Mask) {
         return switch type {
         case .ordinary:
             (
@@ -287,7 +365,7 @@ open class Cell: Equatable {
             )
         case .prunedBranch:
             (
-                validate: Self.validatePrunedBranch,
+                validate: { try Self.validatePrunedBranch(bits: $0, refs: $1, compatibility: compatibility) },
                 mask: { (bits: [Bit], refs: [Cell]) in
                     Mask(maskValue: UInt32([Bit](bits[8..<16]).toBigUInt()))
                 }
@@ -301,17 +379,26 @@ open class Cell: Equatable {
             )
         case .merkleProof:
             (
-                validate: Self.validateMerkleProof,
+                validate: { try Self.validateMerkleProof(bits: $0, refs: $1) },
                 mask: { (bits: [Bit], refs: [Cell]) in
                     Mask(maskValue: refs[0].mask.value >> 1)
                 }
             )
         case .merkleUpdate:
             (
-                validate: Self.validateMerkleUpdate,
+                validate: { try Self.validateMerkleUpdate(bits: $0, refs: $1) },
                 mask: { (bits: [Bit], refs: [Cell]) in
                     Mask(maskValue: (refs[0].mask.value | refs[1].mask.value) >> 1)
                 }
+            )
+        case .big:
+            (
+                validate: { bits, refs in
+                    guard refs.isEmpty, bits.count % 8 == 0, bits.count / 8 <= 0xff_ffff else {
+                        throw ErrorTonSdkSwift("Invalid big cell payload or references")
+                    }
+                },
+                mask: { _, _ in Mask(maskValue: 0) }
             )
         }
     }
@@ -327,7 +414,7 @@ open class Cell: Equatable {
             .storeBytes(self.hash(0).hexToBytes())
             .storeUInt(self.depth(0), 16)
             .storeRef(self)
-            .cell(.merkleProof)
+            .cell(.merkleProof, compatibility: compatibility)
     }
     
     public func toPrunedBranch() throws -> Cell {
@@ -336,7 +423,7 @@ open class Cell: Equatable {
             .storeUInt(1, 8)
             .storeBytes(self.hash(0).hexToBytes())
             .storeUInt(self.depth(0), 16)
-            .cell(.prunedBranch)
+            .cell(.prunedBranch, compatibility: compatibility)
     }
     
     public static func toMerkleUpdate(c1: Cell, c2: Cell) throws -> Cell {
@@ -348,10 +435,11 @@ open class Cell: Equatable {
             .storeUInt(c2.depth(0), 16)
             .storeRef(c1)
             .storeRef(c2)
-            .cell(.merkleUpdate)
+            .cell(.merkleUpdate, compatibility: c1.compatibility)
     }
 
     public func getRefsDescriptor(_ mask: Mask? = nil) -> [Bit] {
+        if type == .big { return Data([13]).toBits() }
         let value = UInt32(refs.count) +
             (isExotic ? 8 : 0) +
             ((mask != nil ? mask!.value : self.mask.value) * 32)
@@ -361,23 +449,26 @@ open class Cell: Equatable {
     }
 
     public func getBitsDescriptor() -> [Bit] {
+        if let data = bigData { return Data([UInt8(data.count >> 16), UInt8((data.count >> 8) & 255), UInt8(data.count & 255)]).toBits() }
         let value = Int(ceil(Double(bits.count) / 8.0)) + Int(floor(Double(bits.count) / 8.0))
         let descriptor = Data([UInt8(value)])
         return descriptor.toBits()
     }
 
     public func getAugmentedBits() -> [Bit] {
-        bits.augment()
+        type == .big ? bits : bits.augment()
     }
 
-    public func hash(_ level: UInt32 = 3) throws -> String {
+    open func hash(_ level: UInt32 = 3) throws -> String {
+        if Swift.type(of: self) == Cell.self, let wrappedCell { return try wrappedCell.hash(level) }
+        let level = min(level, 3)
         guard type != CellType.prunedBranch else {
             let hashIndex = mask.apply(level: level).hashIndex
             let thisHashIndex = mask.hashIndex
             let skip = 16 + hashIndex * Cell.HASH_BITS
 
             if hashIndex != thisHashIndex {
-                return try [Bit](bits[Int(skip)..<Int(skip + Cell.HASH_BITS)]).toHex().uppercased()
+                return try [Bit](bits[Int(skip)..<Int(skip + Cell.HASH_BITS)]).toHex().lowercased()
             } else {
                 return hashes[0]
             }
@@ -386,7 +477,9 @@ open class Cell: Equatable {
     }
 
     // Get cell's depth (max level by default)
-    public func depth(_ level: UInt32 = 3) -> BigUInt {
+    open func depth(_ level: UInt32 = 3) -> BigUInt {
+        if Swift.type(of: self) == Cell.self, let wrappedCell { return wrappedCell.depth(level) }
+        let level = min(level, 3)
         guard type != CellType.prunedBranch else {
             let hashIndex = mask.apply(level: level).hashIndex
             let thisHashIndex = mask.hashIndex
@@ -402,8 +495,18 @@ open class Cell: Equatable {
     }
 
     // Get Slice from current instance
-    public func parse() -> CellSlice {
-        return CellSlice.parse(cell: self)
+    open func parse() -> CellSlice {
+        // A transparent base wrapper delegates the cursor, preserving tracking.
+        // Subclasses may override bits/refs without overriding parse; honor those
+        // dynamic views instead of silently reading their backing cell.
+        if Swift.type(of: self) == Cell.self, let wrappedCell { return wrappedCell.parse() }
+        return CellSlice(bits: bits, refs: refs, sourceCell: self)
+    }
+
+    open func reference(at index: Int) throws -> Cell {
+        if Swift.type(of: self) == Cell.self, let wrappedCell { return try wrappedCell.reference(at: index) }
+        guard refs.indices.contains(index) else { throw ErrorTonSdkSwift("Cell: refs underflow.") }
+        return refs[index]
     }
     
     public func slice() -> CellSlice {
@@ -428,7 +531,7 @@ open class Cell: Equatable {
 
     // Checks Cell equality by comparing cell hashes
     public func isEqual(_ cell: Cell) throws -> Bool {
-        (try hash()) == (try cell.hash())
+        (try hash().lowercased()) == (try cell.hash().lowercased())
     }
     
     public func sign(secretKey32byte: Data) throws -> Data {
