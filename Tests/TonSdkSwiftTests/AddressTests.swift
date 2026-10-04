@@ -9,7 +9,6 @@ import Foundation
 import XCTest
 import BigInt
 import SwiftExtensionsPack
-import Crypto
 import TonSdkSwift
 
 final class AddressTests: XCTestCase {

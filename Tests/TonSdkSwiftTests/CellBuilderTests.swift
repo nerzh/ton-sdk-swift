@@ -23,18 +23,18 @@ final class CellBuilderTests: XCTestCase {
         XCTAssertEqual(try builer.cell().hash(), "e6a7bd4728b8b6267951833bed536c2e203ba91445a94905f358961cc685fbc2")
         
         builer = .init()
-        try builer.storeUInt(BigUInt(powl(2, 30)) - 1, 30)
+        try builer.storeUInt((BigUInt(1) << 30) - 1, 30)
         XCTAssertEqual(try builer.cell().hash(), "20423e02436d18957feb0c7b303561df0d4061256f27cc51ef6595f03a3fab1d")
         
         builer = .init()
-        XCTAssertThrowsError(try builer.storeUInt(BigUInt(powl(2, 30)), 30))
+        XCTAssertThrowsError(try builer.storeUInt(BigUInt(1) << 30, 30))
         
         builer = .init()
         try builer.storeUInt(0, 30)
         XCTAssertEqual(try builer.cell().hash(), "f41a95995fccb3bf442ae56e28cdf165a87290de141db9ec028b2af28846c0ea")
         
         builer = .init()
-        try builer.storeUInt(BigUInt(powl(2, 1023)) - 1, 1023)
+        try builer.storeUInt((BigUInt(1) << 1023) - 1, 1023)
         XCTAssertEqual(try builer.cell().hash(), "82970d4664b7683c3d14d49b1f9ff34966128170301a7becc27af1adbe6a31c9")
     }
     

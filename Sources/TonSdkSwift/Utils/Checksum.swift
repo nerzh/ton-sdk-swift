@@ -6,11 +6,7 @@
 //
 
 import Foundation
-#if canImport(CryptoKit)
-import CryptoKit
-#elseif canImport(Crypto)
-import Crypto
-#endif
+import SwiftExtensionsPack
 
 public extension Data {
     
@@ -57,12 +53,12 @@ public extension Data {
     }
     
     func sha256() -> String {
-        let digest = SHA256.hash(data: self)
+        let digest = SEPCrypto.SHA.sha256.digest(data: self)
         return digest.compactMap { String(format: "%02x", $0) }.joined()
     }
     
     func sha512() -> String {
-        let digest = SHA512.hash(data: self)
+        let digest = SEPCrypto.SHA.sha512.digest(data: self)
         return digest.compactMap { String(format: "%02x", $0) }.joined()
     }
 }

@@ -17,6 +17,24 @@ final class JohnnyMnemonicTests: XCTestCase {
         let hash = TonMnemonic.mnemonicToEntropy(mnemonicArray: mnemonicArray).toHexadecimal
         XCTAssertEqual(hash, "9e9ba97d5b6f703b6f71fc7288998673fa8a339c700663020553ddfa39af33062ee51c331301aaf18b79bb107c42a4b550d74469af0498f75a382712866bfa94")
     }
+
+    func testMnemonicToSeedKnownAnswers() throws {
+        let mnemonicArray = ["fruit", "fog", "amused", "illness", "abstract", "valid", "keep", "play", "wash", "polar", "that", "appear"]
+        // Independent HMAC-SHA512 and PBKDF2-SHA512 vectors generated with Python hashlib.
+        let vectors: [(password: Data?, expected: String)] = [
+            (nil, "c9275fe6b510fe898f868342173519f54b59b59895b7ab16f5fb308aa2c80bfff8aaa80a9b1aa0f6848818ceba4379850657486b3ab0022e2b8b41f604a11153"),
+            (Data([0, 255, 128, 1]), "5f8754f35a06af83380b9f0a2cd3f4f86871ba62b470bc1c6701ed4a39cd2d89e46989c85e83f491c884646c8e09c079107e54577b747f411d23a0aef403b906")
+        ]
+        for vector in vectors {
+            let seed = try TonMnemonic.mnemonicToSeed(
+                mnemonicArray: mnemonicArray,
+                salt: Data("TON default seed".utf8),
+                password: vector.password
+            )
+            XCTAssertEqual(seed.count, 64)
+            XCTAssertEqual(seed.toHexadecimal, vector.expected)
+        }
+    }
     
     func testGenerateWords() async throws {
         let words = try TonMnemonic.generateSeed(wordsCount: .w24)

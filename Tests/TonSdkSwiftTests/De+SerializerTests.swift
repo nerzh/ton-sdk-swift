@@ -9,7 +9,6 @@ import XCTest
 import TonSdkSwift
 import BigInt
 import SwiftExtensionsPack
-import Crypto
 
 final class DeSerializerTests: XCTestCase {
     

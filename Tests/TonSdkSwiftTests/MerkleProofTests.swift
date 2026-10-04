@@ -10,7 +10,6 @@ import XCTest
 import TonSdkSwift
 import BigInt
 import SwiftExtensionsPack
-import Crypto
 
 final class MerkleProofTests: XCTestCase {
     func testMerkleProof() async throws {

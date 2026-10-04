@@ -7,15 +7,6 @@
 
 import Foundation
 import SwiftExtensionsPack
-#if canImport(CommonCrypto)
-import CommonCrypto
-import CryptoKit
-#elseif canImport(CryptoExtras)
-import Crypto
-import CryptoExtras
-#elseif canImport(Crypto)
-import Crypto
-#endif
 
 public final class TonMnemonic {
     public static let TON_PBKDF_ITERATIONS = 100_000
@@ -66,7 +57,7 @@ public final class TonMnemonic {
         guard let salt = TON_SEED_SALT.data(using: .utf8) else {
             throw ErrorTonSdkSwift("Bad salt \(TON_SEED_SALT)")
         }
-        return try pbkdf2SHA512(password: entropy, salt: salt, iterations: iter, keyLength: 64).first == 0
+        return try SEPCrypto.pbkdf2SHA512(password: entropy, salt: salt, iterations: iter, keyLength: 64).first == 0
     }
     
     public static func isPasswordSeed(entropy: Data) throws -> Bool {
@@ -74,7 +65,7 @@ public final class TonMnemonic {
         guard let salt = TON_PASSWORD_SALT.data(using: .utf8) else {
             throw ErrorTonSdkSwift("Bad ton_password_salt \(TON_PASSWORD_SALT)")
         }
-        return try pbkdf2SHA512(password: entropy, salt: salt, iterations: iter, keyLength: 64).first == 1
+        return try SEPCrypto.pbkdf2SHA512(password: entropy, salt: salt, iterations: iter, keyLength: 64).first == 1
     }
     
     public static func isPasswordNeeded(mnemonicArray: [String]) throws -> Bool {
@@ -133,7 +124,7 @@ public final class TonMnemonic {
     
     public static func mnemonicToSeed(mnemonicArray: [String], salt: Data, password: Data?) throws -> Data {
         let entropy = Self.mnemonicToEntropy(mnemonicArray: mnemonicArray, password: password)
-        return try pbkdf2SHA512(password: entropy, salt: salt, iterations: Self.TON_PBKDF_ITERATIONS, keyLength: 64)
+        return try SEPCrypto.pbkdf2SHA512(password: entropy, salt: salt, iterations: Self.TON_PBKDF_ITERATIONS, keyLength: 64)
     }
     
     static func generateWordsTon(words: TonMnemonic.WordsBitsOfEntropy) throws -> [String] {
@@ -163,53 +154,6 @@ public final class TonMnemonic {
         return result
     }
 
-    private class func pbkdf2SHA512(password: Data, salt: Data, iterations: Int, keyLength: Int) throws -> Data {
-        #if canImport(CommonCrypto)
-        guard iterations > 0 else {
-                throw ErrorTonSdkSwift("PBKDF2 iterations must be greater than zero")
-            }
-
-            guard keyLength > 0 else {
-                throw ErrorTonSdkSwift("PBKDF2 keyLength must be greater than zero")
-            }
-
-            var derivedKey = Data(count: keyLength)
-
-            let status = derivedKey.withUnsafeMutableBytes { derivedKeyBuffer in
-                password.withUnsafeBytes { passwordBuffer in
-                    salt.withUnsafeBytes { saltBuffer in
-                        CCKeyDerivationPBKDF(
-                            CCPBKDFAlgorithm(kCCPBKDF2),
-                            passwordBuffer.bindMemory(to: Int8.self).baseAddress,
-                            passwordBuffer.count,
-                            saltBuffer.bindMemory(to: UInt8.self).baseAddress,
-                            saltBuffer.count,
-                            CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA512),
-                            UInt32(iterations),
-                            derivedKeyBuffer.bindMemory(to: UInt8.self).baseAddress,
-                            derivedKeyBuffer.count
-                        )
-                    }
-                }
-            }
-
-            guard status == kCCSuccess else {
-                throw ErrorTonSdkSwift("PBKDF2 failed with CommonCrypto status \(status)")
-            }
-
-            return derivedKey
-        #else
-        let key = try KDF.Insecure.PBKDF2.deriveKey(
-            from: password,
-            salt: salt,
-            using: .sha512,
-            outputByteCount: keyLength,
-            unsafeUncheckedRounds: iterations
-        )
-        return key.withUnsafeBytes { Data($0) }
-        #endif
-    }
-    
     private class func normalizeMnemonic(words: [String]) -> [String] {
         return words.map { $0.lowercased().trimmingCharacters(in: .whitespaces) }
     }
