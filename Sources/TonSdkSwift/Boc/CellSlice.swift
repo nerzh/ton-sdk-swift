@@ -9,13 +9,13 @@ import Foundation
 import BigInt
 
 open class CellSlice: Equatable {
-    open var bits: [Bit]
-    open var refs: [Cell]
+    public var bits: [Bit]
+    public var refs: [Cell]
     public let sourceCell: Cell?
     public let initialBitCount: Int
     public let initialRefCount: Int
-    open var consumedRefs: Int { initialRefCount - refs.count }
-    open var consumedBits: Int { initialBitCount - bits.count }
+    public var consumedRefs: Int { initialRefCount - refs.count }
+    public var consumedBits: Int { initialBitCount - bits.count }
 
     public init(bits: [Bit], refs: [Cell], sourceCell: Cell? = nil) {
         self.bits = bits
@@ -61,7 +61,7 @@ open class CellSlice: Equatable {
         try skipBits(size: size)
     }
     
-    open func loadRef() throws -> Cell {
+    public func loadRef() throws -> Cell {
         if refs.isEmpty {
             throw ErrorTonSdkSwift("Slice: refs underflow.")
         }
@@ -69,7 +69,7 @@ open class CellSlice: Equatable {
         return refs.removeFirst()
     }
     
-    open func preloadRef() throws -> Cell {
+    public func preloadRef() throws -> Cell {
         if refs.isEmpty {
             throw ErrorTonSdkSwift("Slice: refs underflow.")
         }

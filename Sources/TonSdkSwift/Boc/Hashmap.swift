@@ -11,9 +11,9 @@ import BigInt
 public struct HashmapOptions<K, V> {
     /// When supplied, must match the dictionary initializer's explicit keySize.
     public var keySize: Int?
-    @available(*, deprecated, message: "Use PfxHashmapE for prefix dictionaries")
+    @available(*, deprecated, message: "Prefix dictionaries are not supported by Hashmap")
     public var prefixed: Bool?
-    @available(*, deprecated, message: "Use Hashmap or RawHashmap.writeRoot for nonempty roots")
+    @available(*, deprecated, message: "Use Hashmap for nonempty roots")
     public var nonEmpty: Bool?
     public var serializers: (key: (K) throws -> [Bit], value: (V) throws -> Cell)?
     public var deserializers: (key: ([Bit]) throws -> K, value: (Cell) throws -> V)?
@@ -65,7 +65,7 @@ open class Hashmap<K, V> {
             throw ErrorTonSdkSwift("Hashmap option keySize must match the explicit keySize")
         }
         guard options?.prefixed != true, options?.nonEmpty != true else {
-            throw ErrorTonSdkSwift("Use PfxHashmapE for prefix dictionaries and Hashmap for nonempty roots")
+            throw ErrorTonSdkSwift("Prefix dictionaries are not supported by Hashmap and Hashmap for nonempty roots")
         }
         let serializers: (key: (K) throws -> [Bit], value: (V) throws -> Cell) = options?.serializers ?? (key: { $0 as! [Bit] }, value: { $0 as! Cell })
         let deserializers: (key: ([Bit]) throws -> K, value: (Cell) throws -> V) = options?.deserializers ?? (key: { $0 as! K }, value: { $0 as! V })

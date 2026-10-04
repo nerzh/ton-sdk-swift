@@ -52,11 +52,4 @@ final class BOCOrderingAuditTests: XCTestCase {
         XCTAssertTrue(decoded[0] === decoded[1].refs[0])
     }
 
-    func testBothSortsRejectVirtualCellsBeforeDeduplicatingEqualHashes() throws {
-        let leaf = try Cell(bits: [.b1])
-        let virtual = VirtualCell(cell: leaf, effectiveLevel: 0)
-        XCTAssertEqual(try leaf.hash(), try virtual.hash())
-        XCTAssertThrowsError(try Boc.breadthFirstSort(root: [leaf, virtual]))
-        XCTAssertThrowsError(try Boc.depthFirstSort(root: [leaf, virtual]))
-    }
 }

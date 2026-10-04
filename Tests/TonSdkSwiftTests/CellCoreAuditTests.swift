@@ -3,16 +3,17 @@ import XCTest
 @testable import TonSdkSwift
 
 final class CellCoreAuditTests: XCTestCase {
-    func testCompatibilityExampleDistinguishesGappedMaskHashing() throws {
-        let leaf = try Cell()
-        let branch = try leaf.prunedBranch(merkleDepth: 1)
-        let ton = try Cell(refs: [branch])
-        let ever = try Cell(refs: [branch], compatibility: .everscale)
-        XCTAssertEqual(branch.mask.value, 2)
-        XCTAssertEqual(ton.compatibility, .ton)
-        XCTAssertNotEqual(try ton.hash(), try ever.hash())
-        XCTAssertEqual(try Boc.deserialize(data: ton.toBoc()).first, ton)
-        XCTAssertEqual(try Boc.deserialize(data: ever.toBoc(), compatibility: .everscale).first, ever)
+    func testLegacyMessageHeadersRejectUnsupportedFieldsInsteadOfMisreadingThem() throws {
+        let address = try Address(address: "0:" + String(repeating: "0", count: 64))
+        XCTAssertThrowsError(try CommonMsgInfo.extInMsgInfo(.init(src: address, dest: address)).cell())
+        let invalidInbound = try CellBuilder().storeBits([.b1, .b0])
+            .storeAddress(address).storeAddress(address).storeCoins(Coins(0)).cell()
+        XCTAssertThrowsError(try CommonMsgInfo.parse(cs: invalidInbound.parse()))
+        let unsupportedCurrency = try CellBuilder().storeBits([.b0, .b1, .b0, .b0])
+            .storeAddress(nil).storeAddress(address).storeCoins(Coins(0))
+            .storeBit(.b1).storeRef(Cell()).storeCoins(Coins(0)).storeCoins(Coins(0))
+            .storeUInt(0, 64).storeUInt(0, 32).cell()
+        XCTAssertThrowsError(try CommonMsgInfo.parse(cs: unsupportedCurrency.parse()))
     }
 
     func testMaskOperationsRetainAllThirtyTwoBits() {

@@ -12,13 +12,13 @@ final class MalformedBOCRegressionTests: XCTestCase {
 
     func testLocalFixtureAndEveryTruncation() throws {
         let expected = try CellBuilder().storeBytes(Data("SDK".utf8)).cell()
-        for profile: CellCompatibility in [.ton, .everscale] {
-            XCTAssertEqual(try Boc.deserialize(data: leafBOC, compatibility: profile), [expected])
+        do {
+            XCTAssertEqual(try Boc.deserialize(data: leafBOC), [expected])
             for length in 0..<leafBOC.count {
                 XCTAssertThrowsError(try Boc.deserialize(
-                    data: Data(leafBOC.prefix(length)), compatibility: profile), "length=\(length)")
+                    data: Data(leafBOC.prefix(length))), "length=\(length)")
             }
-            XCTAssertThrowsError(try Boc.deserialize(data: leafBOC + Data([0x53]), compatibility: profile))
+            XCTAssertThrowsError(try Boc.deserialize(data: leafBOC + Data([0x53])))
         }
     }
 
@@ -110,26 +110,9 @@ final class MalformedBOCRegressionTests: XCTestCase {
         }
     }
 
-    func testBigHeaderAccountingPayloadLengthsAndTruncations() throws {
-        // One big leaf containing the same three local payload bytes.
-        let big = Data([
-            0xb6, 0xff, 0x9a, 0x73, 1, 1, 1, 1, 0, 7, 1, 7, 0,
-            13, 0, 0, 3, 0x53, 0x44, 0x4b,
-        ])
-        XCTAssertEqual(try Boc.deserialize(data: big, allowBigCells: true).first?.bigData, Data("SDK".utf8))
-        for (offset, values): (Int, [UInt8]) in [
-            (10, [0, 2]), (11, [0, 4, 6, 8]), (13, [0]), (16, [2, 4, 255]),
-        ] {
-            for value in values {
-                var bytes = big
-                bytes[offset] = value
-                XCTAssertThrowsError(try Boc.deserialize(data: bytes, allowBigCells: true),
-                                     "offset=\(offset), value=\(value)")
-            }
-        }
-        for length in 0..<big.count {
-            XCTAssertThrowsError(try Boc.deserialize(data: Data(big.prefix(length)), allowBigCells: true),
-                                 "length=\(length)")
-        }
+    func testEverscaleBigBOCIsRejected() throws {
+        let big = Data([0xb6, 0xff, 0x9a, 0x73, 1, 1, 1, 1, 0, 7, 1, 7, 0, 13, 0, 0, 3, 1, 2, 3])
+        XCTAssertThrowsError(try Boc.deserializeHeader(bytes: big))
+        XCTAssertThrowsError(try Boc.deserialize(data: big))
     }
 }

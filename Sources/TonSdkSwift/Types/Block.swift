@@ -157,11 +157,6 @@ extension StateInitOptions {
 public enum CommonMsgInfo: BlockStruct {
     case intMsgInfo(IntMsgInfo)
     case extInMsgInfo(ExtInMsgInfo)
-    case extOutMsgInfo(ExtOutMsgInfo)
-    /// Raw TL-B addresses and extra currencies; outgoing sources use relaxed rules.
-    case raw(RawCommonMsgInfo)
-
-    public typealias ExtOutMsgInfo = RawExternalOutboundMessageInfo
     
     public var data: CommonMsgInfo { self }
     
@@ -184,20 +179,13 @@ public enum CommonMsgInfo: BlockStruct {
                 .cell()
             
         case let .extInMsgInfo(extInMsgInfo):
-            guard extInMsgInfo.src == nil else {
-                throw ErrorTonSdkSwift("Inbound source must be external; use CommonMsgInfo.raw for addr_extern")
-            }
+            guard extInMsgInfo.src == nil else { throw ErrorTonSdkSwift("Inbound source must be external") }
             return try CellBuilder()
                 .storeBits([.b1, .b0])  // ext_in_msg_info$10
                 .storeAddress(extInMsgInfo.src) // src:MsgAddressExt (addr_none)
                 .storeAddress(extInMsgInfo.dest) // dest:MsgAddressInt
                 .storeCoins(extInMsgInfo.importFee) // import_fee:Grams
                 .cell()
-
-        case let .extOutMsgInfo(info):
-            return try RawCommonMsgInfo.externalOutbound(info).cell(relaxed: true)
-        case let .raw(info):
-            return try info.cell(relaxed: true)
         }
     }
     
@@ -255,32 +243,48 @@ public enum CommonMsgInfo: BlockStruct {
     }
     
     public static func parse(cs: CellSlice) throws -> CommonMsgInfo {
-        let raw = try RawCommonMsgInfo.parse(cs: cs, relaxed: true)
-        switch raw {
-        case let .internalMessage(v):
-            if v.value.other.root == nil, let src = try? v.src.asAddress(), let dest = try? v.dest.asAddress() {
-                return try .intMsgInfo(.init(ihrDisabled: v.ihrDisabled, bounce: v.bounce, bounced: v.bounced,
-                    src: src, dest: dest, value: Coins(nanoValue: String(v.value.grams)),
-                    ihrFee: Coins(nanoValue: String(v.ihrFee)), fwdFee: Coins(nanoValue: String(v.fwdFee)),
-                    createdLt: v.createdLt, createdAt: v.createdAt))
-            }
-            // Optional flattening makes addr_none different from a failed conversion.
-            if v.src == .none, v.value.other.root == nil, let dest = try? v.dest.asAddress() {
-                return try .intMsgInfo(.init(ihrDisabled: v.ihrDisabled, bounce: v.bounce, bounced: v.bounced,
-                    dest: dest, value: Coins(nanoValue: String(v.value.grams)),
-                    ihrFee: Coins(nanoValue: String(v.ihrFee)), fwdFee: Coins(nanoValue: String(v.fwdFee)),
-                    createdLt: v.createdLt, createdAt: v.createdAt))
-            }
-            return .raw(raw)
-        case let .externalInbound(v):
-            if v.src == .none, let dest = try? v.dest.asAddress() {
-                return try .extInMsgInfo(.init(dest: dest, importFee: Coins(nanoValue: String(v.importFee))))
-            }
-            return .raw(raw)
-        case let .externalOutbound(v): return .extOutMsgInfo(v)
-        }
-    }
+        let first = try cs.loadBit()
 
+        if first == .b1 {
+            let second = try cs.loadBit()
+            if second == .b1 {
+                throw ErrorTonSdkSwift("CommonMsgInfo: ext_out_msg_info unimplemented")
+            } else {
+                let src = try cs.loadAddress()
+                guard let dest = try cs.loadAddress() else {
+                    throw ErrorTonSdkSwift("Destination address is required")
+                }
+                guard src == nil else { throw ErrorTonSdkSwift("Inbound source must be external") }
+                let importFee = try cs.loadCoins()
+                let extInMsgInfo = ExtInMsgInfo(src: src, dest: dest, importFee: importFee)
+                return .extInMsgInfo(extInMsgInfo)
+            }
+        }
+
+        if first == .b0 {
+            var data = try IntMsgInfo(
+                ihrDisabled: cs.loadBit() == .b1,
+                bounce: cs.loadBit() == .b1,
+                bounced: cs.loadBit() == .b1,
+                src: cs.loadAddress(),
+                dest: cs.loadAddress() ?? { throw ErrorTonSdkSwift("Destination address is required") }(),
+                value: cs.loadCoins()
+            )
+
+            guard try cs.loadBit() == .b0 else {
+                throw ErrorTonSdkSwift("Extra currencies are not supported by CommonMsgInfo")
+            }
+
+            data.ihrFee = try cs.loadCoins()
+            data.fwdFee = try cs.loadCoins()
+            data.createdLt = try UInt64(cs.loadBigUInt(size: 64))
+            data.createdAt = try UInt32(cs.loadBigUInt(size: 32))
+
+            return CommonMsgInfo.intMsgInfo(data)
+        }
+
+        throw ErrorTonSdkSwift("CommonMsgInfo: invalid tag")
+    }
 }
 
 public struct MessageOptions {

@@ -5,19 +5,6 @@ import XCTest
 @testable import TonSdkSwift
 
 final class UpstreamCellBOCRegressionTests: XCTestCase {
-    func testMixedHashPoliciesCannotProduceAmbiguousBOCs() throws {
-        let payload = try CellBuilder().storeUInt(1, 8).storeUInt(2, 8)
-            .storeUInt(0, 256).storeUInt(0, 16).bits
-        let pruned = try Cell(bits: payload, type: .prunedBranch)
-        let ton = try Cell(refs: [pruned])
-        let everscale = try Cell(refs: [pruned], compatibility: .everscale)
-        XCTAssertNotEqual(try ton.hash(), try everscale.hash())
-        XCTAssertThrowsError(try Cell(refs: [ton], compatibility: .everscale))
-        XCTAssertThrowsError(try Boc.serialize(root: [ton, everscale]))
-        // Pruned records themselves use identical descriptors under both policies.
-        XCTAssertEqual(try Boc.deserialize(data: everscale.toBoc(), compatibility: .everscale), [everscale])
-    }
-
     func testDictionarySkippingAndUnaryPreloadingValidateBeforeConsumption() throws {
         let reference = try Cell()
         let empty = CellSlice(bits: [.b0, .b1], refs: [reference])
@@ -52,14 +39,10 @@ final class UpstreamCellBOCRegressionTests: XCTestCase {
         XCTAssertThrowsError(try Cell(bits: Array(corrupt.dropLast()), refs: update.refs, type: .merkleUpdate))
     }
 
-    func testShapeInspectionAndProofPresenceAreSeparateFromAuthenticity() throws {
+    func testMerkleProofPresenceDoesNotReplaceMetadataValidation() throws {
         let child = try Cell()
         let bits = try CellBuilder().storeUInt(3, 8).storeUInt(0, 256).storeUInt(0, 16).bits
         XCTAssertThrowsError(try Cell(bits: bits, refs: [child], type: .merkleProof))
-        let shape = try Cell(bits: bits, refs: [child], type: .merkleProof, checkMerkleMetadata: false)
-        let boc = try shape.toBoc()
-        XCTAssertThrowsError(try Boc.deserialize(data: boc))
-        XCTAssertEqual(try Boc.deserialize(data: boc, checkMerkleProofs: true, checkMerkleMetadata: false).first, shape)
         XCTAssertThrowsError(try Boc.deserialize(data: child.toBoc(), checkMerkleProofs: true))
     }
 
@@ -116,7 +99,6 @@ final class UpstreamCellBOCRegressionTests: XCTestCase {
         var bad = encoded
         bad[11] = 3
         XCTAssertThrowsError(try Boc.deserialize(data: bad))
-        XCTAssertEqual(try Boc.deserialize(data: bad, validateIndex: false), [root])
         bad[11] = 8
         XCTAssertThrowsError(try Boc.deserializeHeader(bytes: bad))
         let lean = Data([0x68, 0xff, 0x65, 0xf3, 1, 1, 1, 1, 0, 2, 2, 0, 0])
@@ -169,36 +151,12 @@ final class UpstreamCellBOCRegressionTests: XCTestCase {
         ] { XCTAssertThrowsError(try Boc.deserialize(data: Data(bytes))) }
     }
 
-    func testTONConstructionBoundAndExplicitEverscaleDecodeBound() throws {
-        // Retain ancestors so teardown does not rely on a 2048-frame release cascade.
+    func testTONConstructionAndDecodeBounds() throws {
         var cells = [try Cell()]
         for _ in 0..<1024 { cells.append(try Cell(refs: [cells.last!])) }
         XCTAssertThrowsError(try Cell(refs: [cells.last!]))
         XCTAssertEqual(try Boc.deserialize(data: cells.last!.toBoc()).first?.depth(), 1024)
         XCTAssertThrowsError(try Boc.deserialize(data: cells.last!.toBoc(), maxDepth: 1023))
-        for _ in 1024..<2048 { cells.append(try Cell(refs: [cells.last!], compatibility: .everscale)) }
-        let encoded = try cells.last!.toBoc()
-        XCTAssertThrowsError(try Boc.deserialize(data: encoded))
-        XCTAssertEqual(try Boc.deserialize(data: encoded, compatibility: .everscale).first?.depth(), 2048)
-        let deeper = try Cell(refs: [cells.last!], compatibility: .everscale)
-        XCTAssertThrowsError(try Boc.deserialize(data: deeper.toBoc(), compatibility: .everscale))
-        XCTAssertEqual(try Boc.deserialize(data: deeper.toBoc(), maxDepth: 2049, compatibility: .everscale).first?.depth(), 2049)
         while !cells.isEmpty { cells.removeLast() }
-    }
-
-    func testDataBackedBigLeafRequiresExplicitReadOptIn() throws {
-        let cell = try Cell(bigData: Data([1, 2, 3]))
-        let encoded = try Boc.serialize(root: [cell], options: .init(hashCrc32: false))
-        XCTAssertEqual(Array(encoded), [0xb6, 0xff, 0x9a, 0x73, 1, 1, 1, 1, 0, 7, 1, 7, 0, 13, 0, 0, 3, 1, 2, 3])
-        XCTAssertEqual(try cell.hash(), "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81")
-        XCTAssertThrowsError(try Boc.deserialize(data: encoded))
-        XCTAssertEqual(try Boc.deserialize(data: encoded, allowBigCells: true).first?.bigData, cell.bigData)
-        let megabyte = try Cell(bigData: Data(repeating: 0x42, count: 1024 * 1024))
-        XCTAssertEqual(try Boc.deserialize(data: megabyte.toBoc(), allowBigCells: true).first?.bigData, megabyte.bigData)
-        XCTAssertEqual(megabyte.bitLength, 8 * 1024 * 1024)
-        XCTAssertEqual(megabyte.depth(), 0)
-        XCTAssertThrowsError(try Cell(bigData: Data(repeating: 0, count: 0x1000000)))
-        XCTAssertThrowsError(try Cell(bits: [], type: .big))
-        XCTAssertThrowsError(try Cell(refs: [cell]))
     }
 }
