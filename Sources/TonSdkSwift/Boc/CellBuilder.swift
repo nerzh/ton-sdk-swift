@@ -88,12 +88,19 @@ open class CellBuilder {
 
     @discardableResult
     public func storeInt(_ value: BigInt, _ size: Int) throws -> Self {
+        guard size > 0 else {
+            throw ErrorTonSdkSwift("Builder: signed integer size must be positive.")
+        }
+        try checkBitsOverflow(size)
         let intBits = BigInt(1) << (size - 1)
 
         guard value >= -intBits && value < intBits else {
             throw ErrorTonSdkSwift("Builder: can't store an Int, because its value allocates more space than provided.")
         }
-        return try storeNumber(value, size)
+        // BigInt shifts the magnitude while preserving the sign, so extract bits
+        // through the unsigned writer after encoding two's complement.
+        let encoded = value < 0 ? (BigUInt(1) << size) - value.magnitude : value.magnitude
+        return try storeNumber(encoded, size)
     }
 
     @discardableResult
@@ -261,13 +268,4 @@ open class CellBuilder {
         return self
     }
     
-    @discardableResult
-    private func storeNumber(_ value: BigInt, _ size: Int) throws -> Self {
-        let bits = (0..<size).map { i in
-            ((value >> i) & 1) == 1 ? 1 : 0
-        }.reversed()
-        try storeBits([Bit](bits.map { UInt8($0) }))
-        
-        return self
-    }
 }
