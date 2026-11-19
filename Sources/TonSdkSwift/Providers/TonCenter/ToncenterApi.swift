@@ -15,8 +15,8 @@ open class ToncenterApi: SNLResource {
         super.init(protocol: `protocol`,
                    domain: domain,
                    defaultHeaders: [
-                        "Content-Type": "application/json",
-                        "X-API-Key": apiKey
+                        .contentType: "application/json",
+                        .custom("X-API-Key"): apiKey
                    ],
                    requestPerSecondOptions: .init(.init(requestLimit: requestLimit, timeRangeLimitSecond: timeRangeLimitSecond))
         )
@@ -35,8 +35,8 @@ open class ToncenterApi: SNLResource {
         super.init(protocol: `protocol`,
                    domain: domain,
                    defaultHeaders: [
-                        "Content-Type": "application/json",
-                        "X-API-Key": apiKey
+                        .contentType: "application/json",
+                        .custom("X-API-Key"): apiKey
                    ],
                    requestPerSecondOptions: .init(.init(requestLimit: requestLimit, timeRangeLimitSecond: timeRangeLimitSecond))
         )

@@ -19,8 +19,8 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                           resource: resource,
                                           method: .post,
                                           requestParams: params,
-                                          body: json.data(using: .utf8)
-            ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
+                                          body: .raw(json, contentType: "application/json")
+            ).modelExecute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
         } catch {
             throw ErrorTonSdkSwift(error)
         }
@@ -39,8 +39,8 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                           resource: resource,
                                           method: .post,
                                           requestParams: params,
-                                          body: json.data(using: .utf8)
-            ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<ToncenterApi.Account>.self, debug: debug)
+                                          body: .raw(json, contentType: "application/json")
+            ).modelExecute(model: ToncenterApi.ToncenterApiJsonrpcResponse<ToncenterApi.Account>.self, debug: debug)
         } catch {
             throw ErrorTonSdkSwift(error)
         }
@@ -69,8 +69,8 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                           resource: resource,
                                           method: .post,
                                           requestParams: params,
-                                          body: json.data(using: .utf8)
-            ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<[ToncenterApi.TransactionModel]>.self, debug: debug)
+                                          body: .raw(json, contentType: "application/json")
+            ).modelExecute(model: ToncenterApi.ToncenterApiJsonrpcResponse<[ToncenterApi.TransactionModel]>.self, debug: debug)
         } catch {
             throw ErrorTonSdkSwift(error)
         }
@@ -84,8 +84,8 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                           resource: resource,
                                           method: .post,
                                           requestParams: params,
-                                          body: json.data(using: .utf8)
-            ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
+                                          body: .raw(json, contentType: "application/json")
+            ).modelExecute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
         } catch {
             throw ErrorTonSdkSwift(error)
         }
@@ -99,8 +99,8 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                           resource: resource,
                                           method: .post,
                                           requestParams: params,
-                                          body: json.data(using: .utf8)
-            ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
+                                          body: .raw(json, contentType: "application/json")
+            ).modelExecute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
         } catch {
             throw ErrorTonSdkSwift(error)
         }
@@ -114,8 +114,8 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                           resource: resource,
                                           method: .post,
                                           requestParams: params,
-                                          body: json.data(using: .utf8)
-            ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
+                                          body: .raw(json, contentType: "application/json")
+            ).modelExecute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
         } catch {
             throw ErrorTonSdkSwift(error)
         }
@@ -129,8 +129,8 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                           resource: resource,
                                           method: .post,
                                           requestParams: params,
-                                          body: json.data(using: .utf8)
-            ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
+                                          body: .raw(json, contentType: "application/json")
+            ).modelExecute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
         } catch {
             throw ErrorTonSdkSwift(error)
         }
@@ -146,8 +146,8 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                           resource: resource,
                                           method: .post,
                                           requestParams: params,
-                                          body: json.data(using: .utf8)
-            ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
+                                          body: .raw(json, contentType: "application/json")
+            ).modelExecute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
         } catch {
             throw ErrorTonSdkSwift(error)
         }
@@ -174,8 +174,8 @@ public final class ToncenterApiJsonRPCTarget: SNLTarget {
                                           resource: resource,
                                           method: .post,
                                           requestParams: params,
-                                          body: json.data(using: .utf8)
-            ).execute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
+                                          body: .raw(json, contentType: "application/json")
+            ).modelExecute(model: ToncenterApi.ToncenterApiJsonrpcResponse<AnyValue>.self, debug: debug)
         } catch {
             throw ErrorTonSdkSwift(error)
         }
